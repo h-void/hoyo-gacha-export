@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Unified 3-in-1 HoYoverse gacha history exporter for Genshin Impact, Honkai: Star Rail, and Zenless Zone Zero, merged from biuuu/genshin-wish-export, biuuu/star-rail-warp-export, and earthjasonlin/zzz-signal-search-export.",
   "main": "./dist/electron/main/main.js",
-  "author": "h-void <https://github.com/h-void>",
+  "author": "h-void <118628214+h-void@users.noreply.github.com>",
   "contributors": [
     "biuuu <https://github.com/biuuu> (genshin-wish-export, star-rail-warp-export)",
     "earthjasonlin <https://github.com/earthjasonlin> (zzz-signal-search-export)"
@@ -63,7 +63,11 @@
       ]
     },
     "mac": {
-      "icon": "build/icons/icon.icns"
+      "icon": "build/icons/icon.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "win": {
       "icon": "build/icons/icon.ico",
@@ -71,6 +75,7 @@
     },
     "linux": {
       "target": "deb",
+      "category": "Utility",
       "icon": "build/icons"
     }
   },

@@ -32,7 +32,7 @@
 
 ## 开发与构建
 
-需要 Node.js (推荐 18 / 20 LTS) 与 Yarn：
+需要 Node.js (>= 22 LTS) 与 Yarn：
 
 ```bash
 # 安装依赖

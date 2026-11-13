@@ -31,7 +31,7 @@ A unified 3-in-1 desktop gacha history exporter built with Electron + Vue 3 for 
 
 ## Development
 
-Requirements: Node.js 18/20 LTS and Yarn.
+Requirements: Node.js (>= 22 LTS) and Yarn.
 
 ```bash
 # Install dependencies
