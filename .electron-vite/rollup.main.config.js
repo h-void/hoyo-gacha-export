@@ -1,0 +1,61 @@
+const path = require('path')
+const { nodeResolve } = require('@rollup/plugin-node-resolve')
+const commonjs = require('@rollup/plugin-commonjs')
+const esbuild = require('rollup-plugin-esbuild').default
+const alias = require('@rollup/plugin-alias')
+const json = require('@rollup/plugin-json')
+const { version } = require('../package.json')
+
+module.exports = (env = 'production') => {
+  return {
+    input: path.join(__dirname, '../src/main/main.js'),
+    output: {
+      file: path.join(__dirname, '../dist/electron/main/main.js'),
+      format: 'cjs',
+      name: 'MainProcess',
+      sourcemap: false,
+      exports: 'auto'
+    },
+    plugins: [
+      nodeResolve({ jsnext: true, preferBuiltins: true, browser: true }),
+      commonjs(),
+      json(),
+      esbuild({
+        include: /\.[jt]sx?$/,
+        exclude: /node_modules/,
+        sourceMap: false,
+        minify: env === 'production',
+        target: 'esnext',
+        define: {
+          __VERSION__: JSON.stringify(version)
+        },
+        loaders: {
+          '.json': 'json',
+          '.js': 'jsx'
+        }
+      }),
+      alias({
+        entries: [
+          { find: '@main', replacement: path.join(__dirname, '../src/main') },
+          { find: '@games', replacement: path.join(__dirname, '../src/games') }
+        ]
+      })
+    ],
+    external: [
+      'crypto',
+      'assert',
+      'fs',
+      'util',
+      'os',
+      'events',
+      'child_process',
+      'http',
+      'https',
+      'path',
+      'stream',
+      'url',
+      'electron',
+      'original-fs'
+    ]
+  }
+}
