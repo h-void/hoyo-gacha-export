@@ -1,4 +1,4 @@
-const electron = require('electron')
+const electron = process.versions.electron ? require('electron') : {}
 const { app, ipcMain, dialog } = (typeof electron === 'object' && electron) ? electron : {}
 const fs = require('fs-extra')
 const path = require('path')

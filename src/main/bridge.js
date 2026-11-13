@@ -1,4 +1,4 @@
-const electron = require('electron')
+const electron = process.versions.electron ? require('electron') : {}
 const { clipboard, ipcMain } = (typeof electron === 'object' && electron) ? electron : {}
 const { getUrl, getApiUrl, deleteData } = require('./getData')
 const config = require('./config')

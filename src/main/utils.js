@@ -1,7 +1,7 @@
 const fs = require('fs-extra')
 const path = require('path')
 const fetch = require('electron-fetch').default
-const electron = require('electron')
+const electron = process.versions.electron ? require('electron') : {}
 const electronObj = (typeof electron === 'object' && electron !== null) ? electron : {}
 const { BrowserWindow, app } = electronObj
 const crypto = require('crypto')

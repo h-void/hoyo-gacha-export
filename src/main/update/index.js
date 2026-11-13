@@ -1,4 +1,4 @@
-const electron = require('electron')
+const electron = process.versions.electron ? require('electron') : {}
 const { app } = (typeof electron === 'object' && electron) ? electron : {}
 const fetch = require('electron-fetch').default
 const semver = require('semver')

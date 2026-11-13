@@ -1,7 +1,7 @@
 const fs = require('fs-extra')
 const path = require('path')
 const { URL } = require('url')
-const electron = require('electron')
+const electron = process.versions.electron ? require('electron') : {}
 const { app, ipcMain, shell } = (typeof electron === 'object' && electron) ? electron : {}
 const {
   readdir,
