@@ -1,12 +1,14 @@
 {
   "name": "hoyo-gacha-export",
-  "version": "1.0.0",
-  "description": "Unified 3-in-1 HoYoverse gacha history exporter for Genshin Impact, Honkai: Star Rail, and Zenless Zone Zero, merged from biuuu/genshin-wish-export, biuuu/star-rail-warp-export, and earthjasonlin/zzz-signal-search-export.",
+  "version": "1.1.0",
+  "description": "Unified 4-in-1 HoYoverse gacha history exporter for Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, and Miliastra Wonderland (千星奇域).",
   "main": "./dist/electron/main/main.js",
   "author": "h-void <118628214+h-void@users.noreply.github.com>",
   "contributors": [
     "biuuu <https://github.com/biuuu> (genshin-wish-export, star-rail-warp-export)",
-    "earthjasonlin <https://github.com/earthjasonlin> (zzz-signal-search-export)"
+    "earthjasonlin <https://github.com/earthjasonlin> (zzz-signal-search-export)",
+    "Scighost <https://github.com/Scighost> (Starward Beyond / UIGF v4.2 reference)",
+    "GoneTone <https://github.com/GoneTone> (genshin-impact-wish-gacha-analyzer Beyond reference)"
   ],
   "homepage": "https://github.com/h-void/hoyo-gacha-export",
   "repository": {
@@ -125,6 +127,7 @@
   "keywords": [
     "hoyoverse",
     "genshin-impact",
+    "miliastra-wonderland",
     "star-rail",
     "zenless-zone-zero",
     "gacha",

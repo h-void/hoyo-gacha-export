@@ -2,12 +2,20 @@ const config = require('./config')
 const { isPlainObject } = require('./utils')
 const { GAME_IDS, gameI18n } = require('../games/registry')
 
+const BEYOND_GAME_NAMES = {
+  'zh-cn': '千星奇域',
+  'zh-tw': '千星奇域',
+  'ja-jp': '星々の幻境',
+  'ko-kr': '별바다 세계'
+}
+
 const unifiedOverrides = {
   'zh-cn': {
     'ui.win.appTitle': '米哈游抽卡记录导出工具',
     'ui.game.genshin': '原神',
     'ui.game.starrail': '星穹铁道',
     'ui.game.zzz': '绝区零',
+    'ui.game.beyond': '千星奇域',
     'ui.button.files': '导入/导出',
     'ui.button.uigf': '导出UIGF',
     'ui.button.import': '导入UIGF',
@@ -30,21 +38,22 @@ const unifiedOverrides = {
     'ui.setting.uigfReadable': '格式化JSON',
     'ui.setting.uigfGenshinTitle': '原神 UIGF 选项',
     'ui.setting.uigf30Export': '导出原神 UIGF v3.0',
-    'ui.uigf.title': '请选择要导出的账号 (UIGF v4.1)',
+    'ui.uigf.title': '请选择要导出的账号 (UIGF v4.2)',
     'ui.uigf.selectAll': '全选',
     'ui.uigf.emptySelection': '请至少选择一个账号',
     'ui.uigf.importSuccess': '数据导入成功',
     'ui.uigf.exportSuccess': 'UIGF 数据导出成功',
-    'uigf.fileType': '统一可交换抽卡记录标准 v4.0 / v4.1 / v3.0',
+    'uigf.fileType': '统一可交换抽卡记录标准 v4.0 / v4.1 / v4.2 / v3.0',
     'ui.about.license': '本工具为开源软件，源代码使用 MIT 协议授权',
     'ui.about.creditsTitle': '致谢与上游项目声明',
-    'ui.about.creditsIntro': '本项目将以下开源项目整合为三合一桌面工具，谨向原作者致以诚挚感谢：'
+    'ui.about.creditsIntro': '本项目将以下开源项目整合为四合一桌面工具，谨向原作者致以诚挚感谢：'
   },
   'zh-tw': {
     'ui.win.appTitle': '米哈遊抽卡紀錄匯出工具',
     'ui.game.genshin': '原神',
     'ui.game.starrail': '星穹鐵道',
     'ui.game.zzz': '絕區零',
+    'ui.game.beyond': '千星奇域',
     'ui.button.files': '匯入/匯出',
     'ui.button.uigf': '匯出UIGF',
     'ui.button.import': '匯入UIGF',
@@ -67,21 +76,22 @@ const unifiedOverrides = {
     'ui.setting.uigfReadable': '格式化JSON',
     'ui.setting.uigfGenshinTitle': '原神 UIGF 選項',
     'ui.setting.uigf30Export': '匯出原神 UIGF v3.0',
-    'ui.uigf.title': '請選擇要匯出的帳號 (UIGF v4.1)',
+    'ui.uigf.title': '請選擇要匯出的帳號 (UIGF v4.2)',
     'ui.uigf.selectAll': '全選',
     'ui.uigf.emptySelection': '請至少選擇一個帳號',
     'ui.uigf.importSuccess': '資料匯入成功',
     'ui.uigf.exportSuccess': 'UIGF 資料匯出成功',
-    'uigf.fileType': '統一可交換抽卡紀錄標準 v4.0 / v4.1 / v3.0',
+    'uigf.fileType': '統一可交換抽卡紀錄標準 v4.0 / v4.1 / v4.2 / v3.0',
     'ui.about.license': '本工具為開源軟體，原始碼使用 MIT 授權條款',
     'ui.about.creditsTitle': '致謝與上游專案聲明',
-    'ui.about.creditsIntro': '本專案將以下開源專案整合為三合一桌面工具，謹向原作者致以誠摯感謝：'
+    'ui.about.creditsIntro': '本專案將以下開源專案整合為四合一桌面工具，謹向原作者致以誠摯感謝：'
   },
   'en-us': {
     'ui.win.appTitle': 'HoYo Gacha History Exporter',
     'ui.game.genshin': 'Genshin Impact',
     'ui.game.starrail': 'Honkai: Star Rail',
     'ui.game.zzz': 'Zenless Zone Zero',
+    'ui.game.beyond': 'Miliastra Wonderland',
     'ui.button.files': 'Import/Export',
     'ui.button.uigf': 'Export UIGF',
     'ui.button.import': 'Import UIGF',
@@ -100,19 +110,19 @@ const unifiedOverrides = {
     'ui.common.restore': 'Restore',
     'ui.setting.dataManagerHint': 'Unnecessary local records can be hidden or restored.',
     'ui.setting.idVersion': 'ID database version',
-    'ui.setting.uigfAllAccounts': 'Export all selected accounts (cross-game UIGF v4.1)',
+    'ui.setting.uigfAllAccounts': 'Export all selected accounts (cross-game UIGF v4.2)',
     'ui.setting.uigfReadable': 'Readable JSON',
     'ui.setting.uigfGenshinTitle': 'Genshin UIGF Options',
     'ui.setting.uigf30Export': 'Export Genshin UIGF v3.0',
-    'ui.uigf.title': 'Select accounts to export (UIGF v4.1)',
+    'ui.uigf.title': 'Select accounts to export (UIGF v4.2)',
     'ui.uigf.selectAll': 'Select All',
     'ui.uigf.emptySelection': 'Please select at least one account',
     'ui.uigf.importSuccess': 'Data imported successfully',
     'ui.uigf.exportSuccess': 'UIGF data exported successfully',
-    'uigf.fileType': 'Uniformed Interchangeable GachaLog Format v4.0 / v4.1 / v3.0',
+    'uigf.fileType': 'Uniformed Interchangeable GachaLog Format v4.0 / v4.1 / v4.2 / v3.0',
     'ui.about.license': 'This software is open source under the MIT License.',
     'ui.about.creditsTitle': 'Credits & Upstream Attribution',
-    'ui.about.creditsIntro': 'This 3-in-1 tool unifies the following upstream open-source projects with gratitude to their authors:'
+    'ui.about.creditsIntro': 'This 4-in-1 tool integrates and adapts the following open-source projects with gratitude to their authors:'
   }
 }
 
@@ -175,17 +185,19 @@ const prepareData = () => {
         )
         base = assignData(assignData(unifiedOverrides['zh-cn'], unifiedOverrides['en-us']), base)
         if (!raw[lang]) {
-          // ZZZ lacks non-zh/en translations: still honor unified overlay
+          // ZZZ / Beyond lack non-zh/en full translations: still honor unified overlay
           base = assignData(base, unifiedOverrides['en-us'])
         }
       }
+      if (BEYOND_GAME_NAMES[lang]) {
+        base['ui.game.beyond'] = BEYOND_GAME_NAMES[lang]
+      }
       // Normalize hideHiddenPool across games cleanly
-      if (gameId === 'zzz') {
+      if (gameId === 'zzz' || gameId === 'beyond') {
         base['ui.setting.hideHiddenPool'] = base['ui.setting.hideStandard'] || 'Hide Standard Banner'
       } else {
         base['ui.setting.hideHiddenPool'] = base['ui.setting.hideNovice'] || 'Hide Starter Banner'
       }
-      // Ensure star5/star4 keys exist without breaking upstream templates
       gameMap.set(lang, parseData(base))
     }
     i18nMapByGame.set(gameId, gameMap)

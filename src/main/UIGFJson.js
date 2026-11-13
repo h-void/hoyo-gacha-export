@@ -22,11 +22,13 @@ const {
   convertTimeZone,
   sendMsg
 } = require('./utils')
-const { GAME_IDS, GAME_TO_UIGF_KEY, ID_JSON, detectDataGame } = require('../games/registry')
+const { GAME_IDS, GAME_TO_UIGF_KEY, ID_JSON, detectDataGame, getGameAdapter } = require('../games/registry')
 const { getItemTypeNameMap } = require('../games/genshin/gachaTypeMap')
+const { normalizeBeyondLang, normalizeBeyondPoolKey, getBeyondGachaTypeMap } = require('../games/beyond/gachaTypeMap')
 
 const validateUigf30Json = new Ajv({ strict: false }).compile(require('../games/genshin/schema/uigf3_0.json'))
 const validateUigf41Json = new Ajv2020({ strict: false }).compile(require('../games/genshin/schema/uigf4_1.json'))
+const validateUigf42Json = new Ajv2020({ strict: false }).compile(require('../games/genshin/schema/uigf4_2.json'))
 const validateLocalJson = new Ajv({ strict: false }).compile(require('../games/genshin/schema/local-data.json'))
 
 const uigfLangMap = new Map([
@@ -281,16 +283,71 @@ const buildObjectGameAccountExport = (uid, data) => {
   }
 }
 
+const resolveValidUigfLang = (rawLang) => {
+  return normalizeBeyondLang(uigfRevLangMap.get(rawLang) || fixLocalMap.get(rawLang) || rawLang)
+}
+
+const buildBeyondAccountExport = (uid, data) => {
+  const serverTimeZone = getGameAdapter('beyond').serverTimeZone
+  const listTemp = []
+  for (const [type, arr] of data.result) {
+    arr.forEach(log => {
+      const entry = {
+        id: String(log.id || ''),
+        schedule_id: String(log.schedule_id || log.gacha_id || ''),
+        item_type: String(log.item_type || ''),
+        item_id: String(log.item_id || ''),
+        item_name: String(log.item_name ?? log.name ?? ''),
+        rank_type: String(log.rank_type || ''),
+        time: log.time,
+        op_gacha_type: String(log.op_gacha_type || log.gacha_type || type)
+      }
+      if (log.region) {
+        entry.region = String(log.region)
+      }
+      if (typeof log.is_up !== 'undefined' && log.is_up !== null && log.is_up !== '') {
+        entry.is_up = String(log.is_up)
+      }
+      listTemp.push(entry)
+    })
+  }
+  listTemp.sort((a, b) => {
+    if (/^\d+$/.test(a.id) && /^\d+$/.test(b.id)) {
+      const diff = BigInt(a.id) - BigInt(b.id)
+      return diff > 0n ? 1 : diff < 0n ? -1 : 0
+    }
+    return new Date(a.time).getTime() - new Date(b.time).getTime()
+  })
+  let timezone
+  if (typeof data.region_time_zone === 'number') {
+    timezone = data.region_time_zone
+  } else if (data.region && serverTimeZone.has(data.region)) {
+    timezone = serverTimeZone.get(data.region)
+  } else {
+    timezone = inferTimezoneFromUid(uid)
+  }
+  const account = {
+    uid: String(data.uid || uid),
+    timezone,
+    list: listTemp
+  }
+  const validLang = resolveValidUigfLang(data.lang)
+  if (validLang) {
+    account.lang = validLang
+  }
+  return account
+}
+
 /**
  * selections: array of `{ game, uid }` objects or legacy array of uids (for active game).
  */
-const generateUigf41Json = async (selections = null, allMaps = getAllDataMaps()) => {
+const generateUigf4xJson = async (selections = null, allMaps = getAllDataMaps(), targetVersion = 'v4.2') => {
   const result = {
     info: {
       export_timestamp: Math.ceil(Date.now() / 1000),
       export_app: 'hoyo-gacha-export',
       export_app_version: `v${version}`,
-      version: 'v4.1'
+      version: targetVersion
     }
   }
 
@@ -332,13 +389,19 @@ const generateUigf41Json = async (selections = null, allMaps = getAllDataMaps())
     }
     if (game === 'genshin') {
       result[uigfKey].push(await buildGenshinAccountExport(uid, data))
+    } else if (game === 'beyond') {
+      result[uigfKey].push(buildBeyondAccountExport(uid, data))
     } else {
       result[uigfKey].push(buildObjectGameAccountExport(uid, data))
     }
   }
 
-  if (!result.hk4e && !result.hkrpg && !result.nap) {
+  if (!result.hk4e && !result.hkrpg && !result.nap && !result.hk4e_ugc) {
     throw new Error('数据为空')
+  }
+
+  if (result.hk4e_ugc) {
+    result.info.version = 'v4.2'
   }
 
   if (hasGenshin) {
@@ -348,7 +411,15 @@ const generateUigf41Json = async (selections = null, allMaps = getAllDataMaps())
   return result
 }
 
-const start = async (selections, uigfVersion = '4.1') => {
+const generateUigf41Json = async (selections = null, allMaps = getAllDataMaps()) => {
+  return await generateUigf4xJson(selections, allMaps, 'v4.1')
+}
+
+const generateUigf42Json = async (selections = null, allMaps = getAllDataMaps()) => {
+  return await generateUigf4xJson(selections, allMaps, 'v4.2')
+}
+
+const start = async (selections, uigfVersion = '4.2') => {
   let result
   let defaultName
   if (uigfVersion === '3.0') {
@@ -357,14 +428,17 @@ const start = async (selections, uigfVersion = '4.1') => {
     await saveLookupTable()
     defaultName = `UIGF_v3.0_${result.info.uid}_${getTimeString()}.json`
   } else {
-    result = await generateUigf41Json(selections)
+    result = uigfVersion === '4.1'
+      ? await generateUigf41Json(selections)
+      : await generateUigf42Json(selections)
     const accounts = [
       ...(result.hk4e || []),
       ...(result.hkrpg || []),
-      ...(result.nap || [])
+      ...(result.nap || []),
+      ...(result.hk4e_ugc || [])
     ]
     const uidSuffix = accounts.length === 1 ? `_${accounts[0].uid}` : ''
-    defaultName = `UIGF_v4.1${uidSuffix}_${getTimeString()}.json`
+    defaultName = `UIGF_${result.info.version}${uidSuffix}_${getTimeString()}.json`
   }
 
   const filePath = dialog.showSaveDialogSync({
@@ -387,12 +461,23 @@ const fixUigfJson = (importData) => {
         if (typeof item.rank_type !== 'undefined') item.rank_type = String(item.rank_type)
       })
     }
-    for (const key of ['hk4e', 'hkrpg', 'nap']) {
+    for (const key of ['hk4e', 'hkrpg', 'nap', 'hk4e_ugc']) {
       if (Array.isArray(importData[key])) {
         importData[key].forEach(account => {
+          if (typeof account.lang !== 'undefined') {
+            const normalizedLang = normalizeBeyondLang(account.lang)
+            if (normalizedLang) {
+              account.lang = normalizedLang
+            } else {
+              delete account.lang
+            }
+          }
           if (Array.isArray(account.list)) {
             account.list.forEach(item => {
-              if (!item.item_id) item.item_id = ''
+              item.item_id = item.item_id != null ? String(item.item_id) : ''
+              if (item.id != null) item.id = String(item.id)
+              if (item.schedule_id != null) item.schedule_id = String(item.schedule_id)
+              if (item.op_gacha_type != null) item.op_gacha_type = String(item.op_gacha_type)
               if (typeof item.rank_type !== 'undefined') item.rank_type = String(item.rank_type)
               if (typeof item.count !== 'undefined') item.count = String(item.count)
             })
@@ -556,6 +641,77 @@ const importObjectGameAccount = async (uidData, gameId) => {
   await saveAndBackup(finalData, gameId)
 }
 
+const importBeyondUigf4x = async (accounts) => {
+  const dataMap = getAllDataMaps().beyond
+
+  for (const accountData of accounts) {
+    const uid = String(accountData.uid)
+    const isNew = !dataMap.has(uid)
+    const existing = dataMap.get(uid)
+
+    const incomingTimezone = typeof accountData.timezone === 'number' ? accountData.timezone : undefined
+    const regionTimeZone = isNew
+      ? (incomingTimezone ?? inferTimezoneFromUid(uid))
+      : (typeof existing.region_time_zone === 'number' ? existing.region_time_zone : (incomingTimezone ?? inferTimezoneFromUid(uid)))
+
+    const rawLang = isNew ? (accountData.lang || config.lang) : (existing.lang || accountData.lang || config.lang)
+    const targetLang = normalizeBeyondLang(rawLang) || config.lang || 'zh-cn'
+
+    const grouped = {}
+    let detectedRegion = existing?.region || ''
+    for (const recordEntry of accountData.list || []) {
+      const opType = String(recordEntry.op_gacha_type || recordEntry.gacha_type || '2000')
+      const poolKey = normalizeBeyondPoolKey(opType)
+      const timeVal = typeof incomingTimezone === 'number' && typeof regionTimeZone === 'number'
+        ? convertTimeZone(recordEntry.time, incomingTimezone, regionTimeZone)
+        : recordEntry.time
+      const itemName = recordEntry.item_name ?? recordEntry.name ?? ''
+      const itemRegion = recordEntry.region ? String(recordEntry.region) : ''
+      if (!detectedRegion && itemRegion) {
+        detectedRegion = itemRegion
+      }
+      if (!grouped[poolKey]) {
+        grouped[poolKey] = []
+      }
+      grouped[poolKey].push({
+        id: String(recordEntry.id || ''),
+        schedule_id: String(recordEntry.schedule_id || recordEntry.gacha_id || ''),
+        op_gacha_type: opType,
+        gacha_type: poolKey,
+        item_id: String(recordEntry.item_id || ''),
+        item_type: recordEntry.item_type || '',
+        name: itemName,
+        item_name: itemName,
+        rank_type: String(recordEntry.rank_type || ''),
+        time: timeVal,
+        region: itemRegion,
+        is_up: (typeof recordEntry.is_up !== 'undefined' && recordEntry.is_up !== null && recordEntry.is_up !== '')
+          ? String(recordEntry.is_up)
+          : '',
+        count: String(recordEntry.count ?? '1')
+      })
+    }
+
+    const incomingMap = { result: new Map(Object.entries(grouped)), uid }
+    const mergedResult = mergeData(existing, incomingMap)
+    const typeMap = getBeyondGachaTypeMap(targetLang)
+    const finalData = {
+      result: mergedResult,
+      typeMap,
+      time: Date.now(),
+      uid,
+      lang: targetLang,
+      region_time_zone: regionTimeZone,
+      deleted: isNew ? false : Boolean(existing.deleted)
+    }
+    if (detectedRegion) {
+      finalData.region = detectedRegion
+    }
+
+    await saveAndBackup(finalData, 'beyond')
+  }
+}
+
 const importParsedJson = async (importData) => {
   const importedGames = []
 
@@ -572,8 +728,11 @@ const importParsedJson = async (importData) => {
 
   fixUigfJson(importData)
 
-  if (importData?.info?.version && ['v4.0', 'v4.1'].includes(importData.info.version)) {
-    if (!validateUigf41Json(importData)) {
+  if (importData?.info?.version && ['v4.0', 'v4.1', 'v4.2'].includes(importData.info.version)) {
+    const validator = (importData.info.version === 'v4.2' || Array.isArray(importData.hk4e_ugc))
+      ? validateUigf42Json
+      : validateUigf41Json
+    if (!validator(importData)) {
       throw new Error('UIGF v4.x format validation failed')
     }
     if (Array.isArray(importData.hk4e) && importData.hk4e.length) {
@@ -591,6 +750,10 @@ const importParsedJson = async (importData) => {
         await importObjectGameAccount(account, 'zzz')
       }
       importedGames.push('zzz')
+    }
+    if (Array.isArray(importData.hk4e_ugc) && importData.hk4e_ugc.length) {
+      await importBeyondUigf4x(importData.hk4e_ugc)
+      importedGames.push('beyond')
     }
     if (!importedGames.length) {
       throw new Error('UIGF file contains no supported game records')
@@ -647,7 +810,7 @@ const importJson = async () => {
 }
 
 if (ipcMain) {
-  ipcMain.handle('EXPORT_UIGF_JSON', async (event, selections, uigfVersion = '4.1') => {
+  ipcMain.handle('EXPORT_UIGF_JSON', async (event, selections, uigfVersion = '4.2') => {
     await start(selections, uigfVersion)
   })
 
@@ -659,10 +822,12 @@ if (ipcMain) {
 module.exports = {
   generateUigf30Json,
   generateUigf41Json,
+  generateUigf42Json,
   importParsedJson,
   importGenshinUigf30,
   importGenshinUigf4x,
   importObjectGameAccount,
+  importBeyondUigf4x,
   fixUigfJson,
   inferTimezoneFromUid
 }

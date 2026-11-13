@@ -17,7 +17,7 @@
           <el-radio-button :label="0">{{text.auto}}</el-radio-button>
           <el-radio-button :label="1">{{text.cnServer}}</el-radio-button>
           <el-radio-button :label="2">{{text.seaServer}}</el-radio-button>
-          <el-radio-button v-if="activeGame === 'genshin' && settingForm.lang === 'zh-cn'" :label="3">{{ui.button.cloud}}</el-radio-button>
+          <el-radio-button v-if="(activeGame === 'genshin' || activeGame === 'beyond') && settingForm.lang === 'zh-cn'" :label="3">{{ui.button.cloud}}</el-radio-button>
         </el-radio-group>
         <p class="text-gray-400 text-xs m-1.5">{{text.logTypeHint}}</p>
       </el-form-item>
@@ -93,6 +93,14 @@
           <li>
             <a @click="openLink('https://github.com/earthjasonlin/zzz-signal-search-export')" class="cursor-pointer text-blue-500 hover:underline">earthjasonlin/zzz-signal-search-export</a>
             <span> (MIT, Copyright © 2024 earthjasonlin)</span>
+          </li>
+          <li>
+            <a @click="openLink('https://github.com/Scighost/Starward')" class="cursor-pointer text-blue-500 hover:underline">Scighost/Starward</a>
+            <span> (MIT — Miliastra Wonderland & UIGF v4.2 reference)</span>
+          </li>
+          <li>
+            <a @click="openLink('https://github.com/GoneTone/genshin-impact-wish-gacha-analyzer')" class="cursor-pointer text-blue-500 hover:underline">GoneTone/genshin-impact-wish-gacha-analyzer</a>
+            <span> (MIT — Ode pity & UID probing reference)</span>
           </li>
         </ul>
       </div>
@@ -213,6 +221,7 @@ const openLink = (link) => shell.openExternal(link)
 const gameTagType = (game) => {
   if (game === 'starrail') return 'warning'
   if (game === 'zzz') return 'success'
+  if (game === 'beyond') return 'danger'
   return ''
 }
 

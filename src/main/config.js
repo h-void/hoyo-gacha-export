@@ -16,6 +16,22 @@ const createDefaultGameConfig = () => ({
   hideHiddenPool: false
 })
 
+const createGamesConfigMap = () => {
+  const games = {}
+  for (const gameId of GAME_IDS) {
+    games[gameId] = createDefaultGameConfig()
+  }
+  return games
+}
+
+const createUrlsMaps = () => {
+  const maps = {}
+  for (const gameId of GAME_IDS) {
+    maps[gameId] = new Map()
+  }
+  return maps
+}
+
 const config = {
   currentGame: 'genshin',
   lang: detectLocale(),
@@ -24,20 +40,12 @@ const config = {
   autoUpdate: true,
   fetchFullHistory: false,
   readableJSON: false,
-  uigfVersion: '4.1',
+  uigfVersion: '4.2',
   uigfAllAccounts: true,
-  games: {
-    genshin: createDefaultGameConfig(),
-    starrail: createDefaultGameConfig(),
-    zzz: createDefaultGameConfig()
-  }
+  games: createGamesConfigMap()
 }
 
-const urlsMaps = {
-  genshin: new Map(),
-  starrail: new Map(),
-  zzz: new Map()
-}
+const urlsMaps = createUrlsMaps()
 
 const decryptUrlPairs = (pairs = []) => {
   const result = []
@@ -161,6 +169,14 @@ const saveConfig = async () => {
 
 const getPlainConfig = () => {
   const active = getGameConfig(config.currentGame)
+  const games = {}
+  for (const gameId of GAME_IDS) {
+    games[gameId] = {
+      current: config.games[gameId].current,
+      logType: config.games[gameId].logType,
+      hideHiddenPool: config.games[gameId].hideHiddenPool
+    }
+  }
   return {
     currentGame: config.currentGame,
     lang: config.lang,
@@ -176,23 +192,7 @@ const getPlainConfig = () => {
     hideHiddenPool: active.hideHiddenPool,
     hideNovice: active.hideHiddenPool,
     hideStandard: active.hideHiddenPool,
-    games: {
-      genshin: {
-        current: config.games.genshin.current,
-        logType: config.games.genshin.logType,
-        hideHiddenPool: config.games.genshin.hideHiddenPool
-      },
-      starrail: {
-        current: config.games.starrail.current,
-        logType: config.games.starrail.logType,
-        hideHiddenPool: config.games.starrail.hideHiddenPool
-      },
-      zzz: {
-        current: config.games.zzz.current,
-        logType: config.games.zzz.logType,
-        hideHiddenPool: config.games.zzz.hideHiddenPool
-      }
-    }
+    games
   }
 }
 

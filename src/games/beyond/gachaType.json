@@ -1,0 +1,54 @@
+{
+  "zh-cn": [
+    { "key": "2000", "name": "活动颂愿" },
+    { "key": "1000", "name": "常驻颂愿" }
+  ],
+  "zh-tw": [
+    { "key": "2000", "name": "活動頌願" },
+    { "key": "1000", "name": "常駐頌願" }
+  ],
+  "en-us": [
+    { "key": "2000", "name": "Event Ode" },
+    { "key": "1000", "name": "Standard Ode" }
+  ],
+  "de-de": [
+    { "key": "2000", "name": "Ereignis-Ode" },
+    { "key": "1000", "name": "Standard-Ode" }
+  ],
+  "es-es": [
+    { "key": "2000", "name": "Oda de Evento" },
+    { "key": "1000", "name": "Oda Estándar" }
+  ],
+  "fr-fr": [
+    { "key": "2000", "name": "Odes événements" },
+    { "key": "1000", "name": "Odes permanentes" }
+  ],
+  "id-id": [
+    { "key": "2000", "name": "Event Ode" },
+    { "key": "1000", "name": "Standard Ode" }
+  ],
+  "ja-jp": [
+    { "key": "2000", "name": "イベント星願" },
+    { "key": "1000", "name": "通常星願" }
+  ],
+  "ko-kr": [
+    { "key": "2000", "name": "이벤트 축원" },
+    { "key": "1000", "name": "일반 축원" }
+  ],
+  "pt-pt": [
+    { "key": "2000", "name": "Event Ode" },
+    { "key": "1000", "name": "Standard Ode" }
+  ],
+  "ru-ru": [
+    { "key": "2000", "name": "Ода события" },
+    { "key": "1000", "name": "Стандартная Ода" }
+  ],
+  "th-th": [
+    { "key": "2000", "name": "กิจกรรมภาวนา" },
+    { "key": "1000", "name": "ภาวนาถาวร" }
+  ],
+  "vi-vn": [
+    { "key": "2000", "name": "Ca Tụng Sự Kiện" },
+    { "key": "1000", "name": "Ca Tụng Thường" }
+  ]
+}

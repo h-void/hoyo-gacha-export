@@ -23,25 +23,28 @@ const config = require('./config')
 const i18n = require('./i18n')
 const { enableProxy, disableProxy } = require('./module/system-proxy')
 const mitmproxy = require('./module/node-mitmproxy')
-const { mergeData } = require('./utils/mergeData')
+const { mergeData, mergeList } = require('./utils/mergeData')
 const { GAME_IDS, getGameAdapter, detectDataGame } = require('../games/registry')
 
 const dataMapByGame = {
   genshin: new Map(),
   starrail: new Map(),
-  zzz: new Map()
+  zzz: new Map(),
+  beyond: new Map()
 }
 
 const cacheFolderByGame = {
   genshin: null,
   starrail: null,
-  zzz: null
+  zzz: null,
+  beyond: null
 }
 
 const apiDomainByGame = {
   genshin: 'https://public-operation-hk4e.mihoyo.com',
   starrail: 'https://public-operation-hkrpg.mihoyo.com',
-  zzz: 'https://public-operation-nap.mihoyo.com'
+  zzz: 'https://public-operation-nap.mihoyo.com',
+  beyond: 'https://public-operation-hk4e.mihoyo.com'
 }
 
 const getDataMap = (gameId = config.currentGame) => {
@@ -67,7 +70,34 @@ const normalizeLoadedData = (rawData, gameId) => {
     ? new Map(data.typeMap)
     : new Map(adapter.defaultTypeMap)
   data.result = new Map(data.result)
-  if (gameId !== 'genshin') {
+  if (gameId === 'beyond') {
+    const normalizedResult = new Map()
+    data.result.forEach((value, rawKey) => {
+      if (!Array.isArray(value)) return
+      const targetKey = adapter.normalizePoolKey ? adapter.normalizePoolKey(rawKey) : String(rawKey)
+      const mapped = value.map(item => {
+        if (!item || typeof item !== 'object') return item
+        const opType = String(item.op_gacha_type || item.gacha_type || rawKey)
+        const itemName = item.item_name || item.name || ''
+        return {
+          ...item,
+          id: String(item.id || ''),
+          schedule_id: String(item.schedule_id || item.gacha_id || ''),
+          op_gacha_type: opType,
+          gacha_type: adapter.normalizePoolKey ? adapter.normalizePoolKey(opType) : targetKey,
+          item_id: String(item.item_id || ''),
+          item_type: item.item_type || '',
+          name: itemName,
+          item_name: itemName,
+          rank_type: String(item.rank_type || ''),
+          count: item.count ?? '1'
+        }
+      })
+      const existing = normalizedResult.get(targetKey)
+      normalizedResult.set(targetKey, existing ? mergeList(existing, mapped) : mapped)
+    })
+    data.result = normalizedResult
+  } else if (gameId !== 'genshin') {
     data.result.forEach((value) => {
       if (Array.isArray(value)) {
         value.forEach(item => {
@@ -204,7 +234,13 @@ const readLog = async (gameId = config.currentGame) => {
       if (entry.mode === 'direct') {
         const urlMch = logText.match(adapter.urlRegex)
         if (urlMch && urlMch.length) {
-          return getLatestUrl(urlMch)
+          return { primary: getLatestUrl(urlMch), fallback: null }
+        }
+        if (adapter.fallbackUrlRegex) {
+          const fallbackMch = logText.match(adapter.fallbackUrlRegex)
+          if (fallbackMch && fallbackMch.length) {
+            return { primary: null, fallback: getLatestUrl(fallbackMch) }
+          }
         }
         return null
       }
@@ -213,7 +249,7 @@ const readLog = async (gameId = config.currentGame) => {
         if (adapter.directLogUrlRegex) {
           const directMch = logText.match(adapter.directLogUrlRegex)
           if (directMch && directMch.length) {
-            return getLatestUrl(directMch)
+            return { primary: getLatestUrl(directMch), fallback: null }
           }
         }
         const gamePathMch = logText.match(entry.regex)
@@ -222,7 +258,7 @@ const readLog = async (gameId = config.currentGame) => {
           const urlMch = cacheText.match(adapter.urlRegex)
           if (urlMch && urlMch.length) {
             cacheFolderByGame[gameId] = cacheFile.replace(/Cache_Data[/\\]data_2$/, '')
-            return getLatestUrl(urlMch)
+            return { primary: getLatestUrl(urlMch), fallback: null }
           }
         }
         return null
@@ -231,19 +267,34 @@ const readLog = async (gameId = config.currentGame) => {
       const gamePathMch = logText.match(entry.regex)
       if (gamePathMch) {
         const [cacheText, cacheFile] = await getCacheText(gamePathMch[0])
+        const cacheFolder = cacheFile ? cacheFile.replace(/Cache_Data[/\\]data_2$/, '') : null
         const urlMch = cacheText.match(adapter.urlRegex)
         if (urlMch && urlMch.length) {
-          cacheFolderByGame[gameId] = cacheFile.replace(/Cache_Data[/\\]data_2$/, '')
-          return getLatestUrl(urlMch)
+          cacheFolderByGame[gameId] = cacheFolder
+          return { primary: getLatestUrl(urlMch), fallback: null }
+        }
+        if (adapter.fallbackUrlRegex) {
+          const fallbackMch = cacheText.match(adapter.fallbackUrlRegex)
+          if (fallbackMch && fallbackMch.length) {
+            if (!cacheFolderByGame[gameId] && cacheFolder) {
+              cacheFolderByGame[gameId] = cacheFolder
+            }
+            return { primary: null, fallback: getLatestUrl(fallbackMch) }
+          }
         }
       }
       return null
     })
 
     const results = await Promise.all(promises)
-    for (const url of results) {
-      if (url) {
-        return url
+    for (const res of results) {
+      if (res && res.primary) {
+        return res.primary
+      }
+    }
+    for (const res of results) {
+      if (res && res.fallback) {
+        return res.fallback
       }
     }
     sendMsg(text.url.notFound)
@@ -296,11 +347,13 @@ const getGachaLog = async ({ gameId, key, page, name, retryCount, url, endId }) 
   const adapter = getGameAdapter(gameId)
   try {
     const paramKey = adapter.queryParamKey
+    const useBigIntEndId = gameId === 'genshin' || gameId === 'beyond'
+    const pageSize = adapter.pageSize || 20
     const endIdSuffix = gameId === 'genshin'
       ? (endId ? `&end_id=${endId}` : '')
       : `&end_id=${endId || '0'}`
-    const res = await request(`${url}&${paramKey}=${key}&page=${page}&size=20${endIdSuffix}`)
-    if (gameId === 'genshin') {
+    const res = await request(`${url}&${paramKey}=${key}&page=${page}&size=${pageSize}${endIdSuffix}`)
+    if (useBigIntEndId) {
       checkResStatus(res, gameId)
       return res.data
     }
@@ -319,7 +372,7 @@ const getGachaLog = async ({ gameId, key, page, name, retryCount, url, endId }) 
   }
 }
 
-const getGachaLogs = async (gameId, [key, name], queryString) => {
+const getGachaLogs = async (gameId, [key, name], queryString, knownUid = '') => {
   const text = i18n.forGame(gameId, config.lang).log
   const adapter = getGameAdapter(gameId)
   const map = getDataMap(gameId)
@@ -330,7 +383,8 @@ const getGachaLogs = async (gameId, [key, name], queryString) => {
   let uid = ''
   let region = ''
   let region_time_zone
-  let endId = gameId === 'genshin' ? 0 : '0'
+  const useBigIntEndId = gameId === 'genshin' || gameId === 'beyond'
+  let endId = useBigIntEndId ? 0 : '0'
   const domain = apiDomainByGame[gameId] || adapter.defaultApiDomain
   const url = adapter.getGachaLogUrl(domain, key, queryString)
 
@@ -343,7 +397,7 @@ const getGachaLogs = async (gameId, [key, name], queryString) => {
     res = await getGachaLog({ gameId, key, page, name, url, endId, retryCount: 5 })
     await sleep(0.3)
     logs = res?.list || []
-    if (!uid && logs.length) {
+    if (!uid && logs.length && logs[0].uid) {
       uid = String(logs[0].uid)
     }
     if (!region && res?.region) {
@@ -356,11 +410,12 @@ const getGachaLogs = async (gameId, [key, name], queryString) => {
     page += 1
 
     if (logs.length) {
-      endId = gameId === 'genshin' ? BigInt(logs[logs.length - 1].id) : logs[logs.length - 1].id
+      endId = useBigIntEndId ? BigInt(logs[logs.length - 1].id) : logs[logs.length - 1].id
     }
 
-    if (!config.fetchFullHistory && logs.length && uid && map.has(uid)) {
-      const result = map.get(uid).result
+    const activeUid = uid || (knownUid ? String(knownUid) : '')
+    if (!config.fetchFullHistory && logs.length && activeUid && map.has(activeUid)) {
+      const result = map.get(activeUid).result
       if (result.has(key)) {
         const arr = result.get(key)
         if (arr && arr.length) {
@@ -382,13 +437,24 @@ const getGachaLogs = async (gameId, [key, name], queryString) => {
 const tryGetUid = async (queryString, gameId = config.currentGame) => {
   const adapter = getGameAdapter(gameId)
   const domain = apiDomainByGame[gameId] || adapter.defaultApiDomain
+  const pageSize = adapter.pageSize || 6
   try {
     for (const [key] of adapter.defaultTypeMap) {
       const baseUrl = adapter.getGachaLogUrl(domain, key, queryString)
-      const res = await request(`${baseUrl}&${adapter.queryParamKey}=${key}&page=1&size=6`)
+      const res = await request(`${baseUrl}&${adapter.queryParamKey}=${key}&page=1&size=${pageSize}`)
       checkResStatus(res, gameId)
-      if (res.data && res.data.list && res.data.list.length) {
+      if (res.data && res.data.list && res.data.list.length && res.data.list[0].uid) {
         return String(res.data.list[0].uid)
+      }
+    }
+    if (typeof adapter.getFallbackUidUrls === 'function') {
+      for (const fallbackUrl of adapter.getFallbackUidUrls(domain, queryString)) {
+        try {
+          const res = await request(fallbackUrl)
+          if (res?.retcode === 0 && res.data?.list?.length && res.data.list[0].uid) {
+            return String(res.data.list[0].uid)
+          }
+        } catch (e) {}
       }
     }
   } catch (e) {}
@@ -405,13 +471,13 @@ const ensureProxyServer = (port) => {
     proxyServerCreated = true
     mitmproxy.createProxy({
       sslConnectInterceptor: (req) => {
-        if (/(webstatic([^\.]{2,10})?|public-operation-[^.]+|api-takumi[^.]*|sg-public-api)\.(mihoyo|hoyoverse)\.com/.test(req.url)) {
+        if (/(webstatic([^\.]{2,10})?|gs|public-operation-[^.]+|api-takumi[^.]*|sg-public-api)\.(mihoyo|hoyoverse)\.com/.test(req.url)) {
           return true
         }
       },
       requestInterceptor: (rOptions, req, res, ssl, next) => {
         next()
-        if (/(webstatic([^\.]{2,10})?|public-operation-[^.]+|api-takumi[^.]*|sg-public-api)\.(mihoyo|hoyoverse)\.com/.test(rOptions.hostname)) {
+        if (/(webstatic([^\.]{2,10})?|gs|public-operation-[^.]+|api-takumi[^.]*|sg-public-api)\.(mihoyo|hoyoverse)\.com/.test(rOptions.hostname)) {
           if (/authkey=[^&]+/.test(rOptions.path) && pendingProxyResolve) {
             const cb = pendingProxyResolve
             pendingProxyResolve = null
@@ -513,7 +579,8 @@ const fetchData = async (urlOverride, gameId = config.currentGame) => {
     }
   }
   queryString = searchParams.toString()
-  const lang = searchParams.get('lang') || config.lang
+  const rawLang = searchParams.get('lang') || config.lang
+  const lang = gameId === 'beyond' ? (adapter.formatLocalLang(rawLang) || config.lang) : rawLang
   const gachaTypeMap = adapter.getGachaType(lang, detectLocale)
 
   const result = new Map()
@@ -523,7 +590,7 @@ const fetchData = async (urlOverride, gameId = config.currentGame) => {
   let localTimeZone
 
   for (const [key, name] of gachaTypeMap) {
-    const { list, uid, region, region_time_zone } = await getGachaLogs(gameId, [key, name], queryString)
+    const { list, uid, region, region_time_zone } = await getGachaLogs(gameId, [key, name], queryString, vUid)
 
     if (gameId === 'zzz') {
       const poolTimeZone = region ? adapter.serverTimeZone.get(region) : undefined
@@ -550,12 +617,60 @@ const fetchData = async (urlOverride, gameId = config.currentGame) => {
           localTimeZone = region_time_zone
         }
       }
+    } else if (gameId === 'beyond') {
+      const poolTimeZone = region ? adapter.serverTimeZone?.get(region) : undefined
+      if (localTimeZone === undefined) {
+        const uidKey = uid || (vUid ? String(vUid) : '')
+        localTimeZone = (uidKey ? map.get(uidKey)?.region_time_zone : undefined) ??
+          (typeof region_time_zone === 'number' ? region_time_zone : undefined) ??
+          poolTimeZone
+      }
+      if (poolTimeZone !== undefined && localTimeZone !== undefined && poolTimeZone !== localTimeZone) {
+        list.forEach(item => {
+          item.time = convertTimeZone(item.time, poolTimeZone, localTimeZone)
+        })
+      }
     }
 
     let logs
     if (gameId === 'genshin') {
       logs = list.map((item) => {
         return [item.time, item.name, item.item_type, parseInt(item.rank_type, 10), item.gacha_type, item.id]
+      })
+    } else if (gameId === 'beyond') {
+      logs = list.map((item) => {
+        const {
+          id,
+          schedule_id,
+          op_gacha_type,
+          gacha_type,
+          item_id,
+          item_type,
+          item_name,
+          name: rawName,
+          rank_type,
+          time,
+          region: itemRegion,
+          is_up,
+          count
+        } = item
+        const itemName = item_name || rawName || ''
+        const opType = String(op_gacha_type || gacha_type || key)
+        return {
+          id: String(id || ''),
+          schedule_id: String(schedule_id || ''),
+          op_gacha_type: opType,
+          gacha_type: adapter.normalizePoolKey(opType),
+          item_id: String(item_id || ''),
+          item_type: item_type || '',
+          name: itemName,
+          item_name: itemName,
+          rank_type: String(rank_type || ''),
+          time,
+          region: itemRegion || region || '',
+          is_up: (typeof is_up !== 'undefined' && is_up !== null && is_up !== '') ? String(is_up) : '',
+          count: count ?? '1'
+        }
       })
     } else {
       logs = list.map((item) => {
@@ -738,6 +853,8 @@ exports.getGachaType = (lang, gameId = config.currentGame) => {
 exports.readData = readData
 exports.getUrl = getUrl
 exports.getApiUrl = getApiUrl
+exports.getQuerystring = getQuerystring
+exports.normalizeLoadedData = normalizeLoadedData
 exports.deleteData = deleteData
 exports.saveData = saveData
 exports.changeCurrent = changeCurrent

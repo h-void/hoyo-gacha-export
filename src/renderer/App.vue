@@ -10,6 +10,7 @@
         <el-radio-button label="genshin">{{ ui.game.genshin }}</el-radio-button>
         <el-radio-button label="starrail">{{ ui.game.starrail }}</el-radio-button>
         <el-radio-button label="zzz">{{ ui.game.zzz }}</el-radio-button>
+        <el-radio-button label="beyond">{{ ui.game.beyond }}</el-radio-button>
       </el-radio-group>
 
       <div class="flex items-center gap-2">
@@ -104,7 +105,7 @@
       >
         <p class="text-center text-gray-600 my-2 font-medium">{{ typeMap.get(item[0]) || item[0] }}</p>
         <pie-chart :data="item" :i18n="state.i18n" :typeMap="typeMap" :game="state.activeGame"></pie-chart>
-        <gacha-detail :i18n="state.i18n" :data="item" :typeMap="typeMap" :game="state.activeGame"></gacha-detail>
+        <gacha-detail :i18n="state.i18n" :data="item" :typeMap="typeMap" :lang="state.config.lang" :game="state.activeGame"></gacha-detail>
       </div>
     </div>
 
@@ -136,7 +137,7 @@
           <el-checkbox v-model="selectAllUigf">{{ ui.uigf.selectAll }}</el-checkbox>
           <el-checkbox v-model="state.config.readableJSON" @change="saveReadableSetting">{{ ui.setting.uigfReadable }}</el-checkbox>
         </div>
-        <div v-for="gId in ['genshin', 'starrail', 'zzz']" :key="gId">
+        <div v-for="gId in GAME_LIST" :key="gId">
           <template v-if="state.allAccounts[gId] && state.allAccounts[gId].length">
             <p class="text-xs font-medium text-gray-500 mb-1">{{ ui.game[gId] }}</p>
             <div class="space-y-1 pl-2">
@@ -186,15 +187,19 @@ import { version } from '../../package.json'
 import genshinGachaType from '../games/genshin/gachaType.json'
 import starrailGachaType from '../games/starrail/gachaType.json'
 import zzzGachaType from '../games/zzz/gachaType.json'
+import beyondGachaType from '../games/beyond/gachaType.json'
 import { ElMessage } from 'element-plus'
 
 const starrailGachaTypeMap = new Map(starrailGachaType)
 const zzzGachaTypeMap = new Map(zzzGachaType)
 
+const GAME_LIST = ['genshin', 'starrail', 'zzz', 'beyond']
+
 const HIDDEN_POOL_KEYS = {
   genshin: '100',
   starrail: '2',
-  zzz: '1'
+  zzz: '1',
+  beyond: '1000'
 }
 
 const state = reactive({
@@ -203,7 +208,7 @@ const state = reactive({
   log: '',
   dataMap: new Map(),
   current: 0,
-  allAccounts: { genshin: [], starrail: [], zzz: [] },
+  allAccounts: { genshin: [], starrail: [], zzz: [], beyond: [] },
   allDataList: [],
   showSetting: false,
   i18n: null,
@@ -239,7 +244,7 @@ const allDataInfo = computed(() => {
 })
 
 const hasAnyAccounts = computed(() => {
-  return ['genshin', 'starrail', 'zzz'].some(gId => (state.allAccounts[gId] || []).length > 0)
+  return GAME_LIST.some(gId => (state.allAccounts[gId] || []).length > 0)
 })
 
 const ui = computed(() => state.i18n?.ui)
@@ -307,6 +312,8 @@ const typeMap = computed(() => {
     list = genshinGachaType[lang] || genshinGachaType['en-us'] || genshinGachaType['zh-cn']
   } else if (state.activeGame === 'starrail') {
     list = starrailGachaTypeMap.get(lang) || starrailGachaTypeMap.get('en-us') || starrailGachaTypeMap.get('zh-cn')
+  } else if (state.activeGame === 'beyond') {
+    list = beyondGachaType[lang] || beyondGachaType['en-us'] || beyondGachaType['zh-cn']
   } else {
     list = zzzGachaTypeMap.get(lang) || zzzGachaTypeMap.get('en-us') || zzzGachaTypeMap.get('zh-cn')
   }
@@ -391,7 +398,7 @@ const toggleUigfSelection = (game, uid, checked) => {
 
 const allAvailableUigfAccounts = computed(() => {
   const out = []
-  for (const gId of ['genshin', 'starrail', 'zzz']) {
+  for (const gId of GAME_LIST) {
     for (const acc of state.allAccounts[gId] || []) {
       out.push({ game: gId, uid: acc.uid })
     }
@@ -430,7 +437,7 @@ const confirmUigfExport = async () => {
   }
   state.showUigfDlg = false
   try {
-    await ipcRenderer.invoke('EXPORT_UIGF_JSON', state.uigfSelections.map(item => ({ ...item })), '4.1')
+    await ipcRenderer.invoke('EXPORT_UIGF_JSON', state.uigfSelections.map(item => ({ ...item })), '4.2')
     ElMessage.success(ui.value.uigf.exportSuccess)
   } catch (e) {
     ElMessage.error(e.message || String(e))

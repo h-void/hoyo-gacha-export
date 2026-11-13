@@ -3,7 +3,8 @@ import { isWeapon, isCharacter, isBangboo } from './utils'
 const GAME_POOL_ORDER = {
   genshin: ['301', '302', '500', '200', '100'],
   starrail: ['11', '12', '21', '22', '1', '2'],
-  zzz: ['2', '3', '5', '102', '103', '1']
+  zzz: ['2', '3', '5', '102', '103', '1'],
+  beyond: ['2000', '1000']
 }
 
 const itemCount = (map, name) => {
@@ -30,6 +31,7 @@ const gachaDetail = (data, game = 'genshin') => {
   if (!data) return
   const detailMap = new Map()
   const isZzz = game === 'zzz'
+  const isBeyond = game === 'beyond'
   const keys = getOrderKeys(data, game)
 
   for (const key of keys) {
@@ -46,18 +48,26 @@ const gachaDetail = (data, game = 'genshin') => {
           date: [],
           ssrPos: [], countMio: 0, total: value.length
         }
-      : {
-          count3: 0, count4: 0, count5: 0,
-          count3w: 0, count4w: 0, count5w: 0, count4c: 0, count5c: 0,
-          weapon3: new Map(), weapon4: new Map(), weapon5: new Map(),
-          char4: new Map(), char5: new Map(),
-          date: [],
-          ssrPos: [], countMio: 0, total: value.length
-        }
+      : isBeyond
+        ? {
+            count2: 0, count3: 0, count4: 0, count5: 0,
+            typeMap2: new Map(), typeMap3: new Map(), typeMap4: new Map(), typeMap5: new Map(),
+            date: [],
+            ssrPos: [], countMio: 0, total: value.length
+          }
+        : {
+            count3: 0, count4: 0, count5: 0,
+            count3w: 0, count4w: 0, count5w: 0, count4c: 0, count5c: 0,
+            weapon3: new Map(), weapon4: new Map(), weapon5: new Map(),
+            char4: new Map(), char5: new Map(),
+            date: [],
+            ssrPos: [], countMio: 0, total: value.length
+          }
 
     let lastSSR = 0
     let dateMin = 0
     let dateMax = 0
+    const beyondTargetRank = String(key) === '1000' ? 4 : 5
 
     value.forEach((item, index) => {
       let time, name, type, rank, wishType
@@ -65,10 +75,10 @@ const gachaDetail = (data, game = 'genshin') => {
         [time, name, type, rank, wishType] = item
       } else {
         time = item.time
-        name = item.name
+        name = item.item_name ?? item.name
         type = item.item_type
         rank = item.rank_type
-        wishType = item.gacha_type || key
+        wishType = item.op_gacha_type || item.gacha_type || key
       }
 
       const rankNum = parseInt(rank, 10)
@@ -114,6 +124,28 @@ const gachaDetail = (data, game = 'genshin') => {
             detail.count4c++
             itemCount(detail.char4, name)
           }
+        }
+      } else if (isBeyond) {
+        const typeLabel = type || '-'
+        if (rankNum === 2) {
+          detail.count2++
+          itemCount(detail.typeMap2, typeLabel)
+        } else if (rankNum === 3) {
+          detail.count3++
+          itemCount(detail.typeMap3, typeLabel)
+        } else if (rankNum === 4) {
+          detail.count4++
+          itemCount(detail.typeMap4, typeLabel)
+        } else if (rankNum === 5) {
+          detail.count5++
+          itemCount(detail.typeMap5, typeLabel)
+        }
+        if (rankNum === beyondTargetRank) {
+          detail.ssrPos.push([name, index + 1 - lastSSR, time, wishType || key])
+          lastSSR = index + 1
+          detail.countMio = 0
+        } else {
+          detail.countMio++
         }
       } else {
         if (rankNum === 3) {

@@ -1,6 +1,7 @@
 const genshinConfig = require('./genshin/config')
 const starrailConfig = require('./starrail/config')
 const zzzConfig = require('./zzz/config')
+const beyondConfig = require('./beyond/config')
 
 const starrailIdJson = require('./starrail/idJson.json')
 const zzzIdJson = require('./zzz/idJson.json')
@@ -41,15 +42,21 @@ const gameI18n = {
     'zh-cn': require('./zzz/i18n/简体中文.json'),
     'zh-tw': require('./zzz/i18n/繁體中文.json'),
     'en-us': require('./zzz/i18n/English.json')
+  },
+  beyond: {
+    'zh-cn': require('./beyond/i18n/简体中文.json'),
+    'zh-tw': require('./beyond/i18n/繁體中文.json'),
+    'en-us': require('./beyond/i18n/English.json')
   }
 }
 
-const GAME_IDS = ['genshin', 'starrail', 'zzz']
+const GAME_IDS = ['genshin', 'starrail', 'zzz', 'beyond']
 
 const GAMES = {
   genshin: genshinConfig,
   starrail: starrailConfig,
-  zzz: zzzConfig
+  zzz: zzzConfig,
+  beyond: beyondConfig
 }
 
 const ID_JSON = {
@@ -60,22 +67,25 @@ const ID_JSON = {
 const UIGF_KEY_TO_GAME = {
   hk4e: 'genshin',
   hkrpg: 'starrail',
-  nap: 'zzz'
+  nap: 'zzz',
+  hk4e_ugc: 'beyond'
 }
 
 const GAME_TO_UIGF_KEY = {
   genshin: 'hk4e',
   starrail: 'hkrpg',
-  zzz: 'nap'
+  zzz: 'nap',
+  beyond: 'hk4e_ugc'
 }
 
 function getGameAdapter(gameId = 'genshin') {
   return GAMES[gameId] || GAMES.genshin
 }
 
+const BEYOND_TYPE_HINT_RE = /(装扮套装|裝扮套裝|装扮部件|裝扮部件|装扮形录|裝扮形錄|互动动作|互動動作|互动表情|互動表情|Cosmetic Set|Cosmetic Component|Cosmetic Catalog|Interactive Actions?|Interactive Expressions?|颂愿|頌願|星願|축원|\bOdes?\b|Ода|ภาวนา|Ca Tụng)/i
 const ZZZ_TYPE_HINT_RE = /(音擎|代理人|邦布|Bangboo|W-Engine|Agent|エージェント|ボンプ|音動機|에이전트|W-엔진|独家|频段|調頻|调频|Channel)/i
 const HSR_TYPE_HINT_RE = /(光锥|光錐|Light Cone|Lichtkegel|Cono|cône|光円錐|광추|跃迁|躍遷|Warp|Jump|Saut|Salto|Прыжок|跳躍|워프|Bước Nhảy)/i
-const GENSHIN_TYPE_HINT_RE = /(祈愿|祈願|Wish|Gebet|Gachapón|Vœux|Oração|Молитва|祈願|기원|อธิษฐาน|Cầu Nguyện|Permohonan)/i
+const GENSHIN_TYPE_HINT_RE = /(祈愿|祈願|Wish|Gebet|Gachapón|Vœux|Oração|Молитва|기원|อธิษฐาน|Cầu Nguyện|Permohonan)/i
 
 function detectDataGame(data) {
   if (!data || !data.result) return null
@@ -90,6 +100,9 @@ function detectDataGame(data) {
     if (Array.isArray(list) && list.length > 0 && Array.isArray(list[0])) {
       return 'genshin'
     }
+    if (['1000', '2000', '20011', '20012', '20021', '20022'].includes(String(key))) {
+      return 'beyond'
+    }
     if (['301', '302', '200', '400', '500', '100'].includes(String(key))) {
       return 'genshin'
     }
@@ -101,12 +114,14 @@ function detectDataGame(data) {
     }
   }
 
-  // Inspect items for ZZZ rank '2' or ZZZ item_type
+  // Inspect items for Beyond fields first (Beyond also has rank_type === '2'), then ZZZ/HSR
   for (const [, list] of resultEntries) {
     if (!Array.isArray(list)) continue
     for (const item of list) {
       if (Array.isArray(item)) return 'genshin'
       if (item && typeof item === 'object') {
+        if ('op_gacha_type' in item || 'schedule_id' in item || 'item_name' in item) return 'beyond'
+        if (item.item_type && BEYOND_TYPE_HINT_RE.test(item.item_type)) return 'beyond'
         if (String(item.rank_type) === '2') return 'zzz'
         if (item.item_type && ZZZ_TYPE_HINT_RE.test(item.item_type)) return 'zzz'
         if (item.item_type && HSR_TYPE_HINT_RE.test(item.item_type)) return 'starrail'
@@ -122,6 +137,7 @@ function detectDataGame(data) {
         ? data.typeMap
         : Object.entries(data.typeMap)
     const joined = typeEntries.map(([, v]) => v || '').join(' ')
+    if (BEYOND_TYPE_HINT_RE.test(joined)) return 'beyond'
     if (GENSHIN_TYPE_HINT_RE.test(joined)) return 'genshin'
     if (ZZZ_TYPE_HINT_RE.test(joined)) return 'zzz'
     if (HSR_TYPE_HINT_RE.test(joined)) return 'starrail'

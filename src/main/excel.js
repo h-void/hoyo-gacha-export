@@ -49,13 +49,13 @@ const addRawSheet = (workbook, data) => {
         ])
       } else {
         rows.push([
-          log.gacha_id || '',
-          log.gacha_type || poolKey,
+          log.gacha_id || log.schedule_id || '',
+          log.op_gacha_type || log.gacha_type || poolKey,
           log.id || '',
           log.item_id || '',
           log.item_type,
           data.lang,
-          log.name,
+          log.item_name || log.name,
           String(log.rank_type),
           log.time,
           data.uid
@@ -90,6 +90,8 @@ const createWorkbookBuffer = async (data, gameId = config.currentGame, i18nBundl
   const typeMap = getGachaType(data.lang, gameId)
   const workbook = new ExcelJS.Workbook()
   const isZzz = gameId === 'zzz'
+  const isBeyond = gameId === 'beyond'
+  const adapter = getGameAdapter(gameId)
   const usedSheetNames = new Set()
 
   for (const [key, value] of data.result) {
@@ -101,9 +103,9 @@ const createWorkbookBuffer = async (data, gameId = config.currentGame, i18nBundl
     usedSheetNames.add(sheetName)
 
     const sheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 1 }] })
-    let width = [24, 14, 8, 8, 8, 8, 8]
+    let width = isBeyond ? [24, 24, 14, 8, 8, 8, 16] : [24, 14, 8, 8, 8, 8, 8]
     if (!data.lang || !data.lang.includes('zh-')) {
-      width = [24, 32, 16, 12, 12, 12, 8]
+      width = isBeyond ? [24, 32, 20, 12, 12, 12, 22] : [24, 32, 16, 12, 12, 12, 8]
     }
     const excelKeys = ['time', 'name', 'type', 'rank', 'total', 'pity', 'remark']
     sheet.columns = excelKeys.map((colKey, index) => ({
@@ -136,15 +138,31 @@ const createWorkbookBuffer = async (data, gameId = config.currentGame, i18nBundl
         }
       } else {
         const rankStr = String(log.rank_type)
-        let displayRank = rankStr
+        const rankNum = parseInt(rankStr, 10) || rankStr
+        const itemName = log.item_name || log.name || ''
+        let displayRank = isBeyond ? rankNum : rankStr
         if (isZzz) {
           if (rankStr === '2') displayRank = zzzLabels.star2
           else if (rankStr === '3') displayRank = zzzLabels.star3
           else displayRank = zzzLabels.star4
         }
-        rows.push([log.time, log.name, log.item_type, displayRank, total, pity])
+        const row = [log.time, itemName, log.item_type, displayRank, total, pity]
+        if (isBeyond && key === '2000') {
+          const opType = String(log.op_gacha_type || log.gacha_type || '')
+          if (opType && opType !== '2000') {
+            const subLabel = adapter.getSubPoolLabel?.(opType, data.lang || config.lang)
+            if (subLabel) {
+              row.push(subLabel)
+            }
+          }
+        }
+        rows.push(row)
         rowRanks.push(rankStr)
-        if ((isZzz && rankStr === '4') || (!isZzz && rankStr === '5')) {
+        if (
+          (isZzz && rankStr === '4') ||
+          (isBeyond && ((key === '1000' && rankStr === '4') || (key !== '1000' && rankStr === '5'))) ||
+          (!isZzz && !isBeyond && rankStr === '5')
+        ) {
           pity = 0
         }
       }
@@ -165,8 +183,10 @@ const createWorkbookBuffer = async (data, gameId = config.currentGame, i18nBundl
 
     const rankColorMap = isZzz
       ? { 2: 'ff8e8e8e', 3: 'ffa256e1', 4: 'ffbd6932' }
-      : { 3: 'ff8e8e8e', 4: 'ffa256e1', 5: 'ffbd6932' }
-    const lowestRank = isZzz ? '2' : '3'
+      : isBeyond
+        ? { 2: 'ff8e8e8e', 3: key === '1000' ? 'ff5470c6' : 'ff8e8e8e', 4: 'ffa256e1', 5: 'ffbd6932' }
+        : { 3: 'ff8e8e8e', 4: 'ffa256e1', 5: 'ffbd6932' }
+    const lowestRank = (isZzz || (isBeyond && key === '1000')) ? '2' : '3'
 
     rowRanks.forEach((rankVal, i) => {
       cols.forEach((c) => {
