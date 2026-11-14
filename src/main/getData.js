@@ -164,13 +164,15 @@ const readData = async (force = false) => {
     }
 
     const gameCfg = config.getGameConfig(gameId)
+    const currentUid = gameCfg.current ? String(gameCfg.current) : ''
+    const currentEntry = currentUid ? map.get(currentUid) : null
     const activeEntries = Array.from(map.entries()).filter(([, d]) => !d.deleted)
     if (
-      (!gameCfg.current && activeEntries.length) ||
-      (gameCfg.current && map.size && !map.has(gameCfg.current))
+      (!currentUid && activeEntries.length) ||
+      (currentUid && (!currentEntry || currentEntry.deleted))
     ) {
-      const nextUid = activeEntries.length ? activeEntries[0][0] : map.keys().next().value
-      config.setGameConfig(gameId, 'current', nextUid || 0)
+      const nextUid = activeEntries.length ? activeEntries[0][0] : 0
+      config.setGameConfig(gameId, 'current', nextUid)
       await config.save()
     }
   }
@@ -178,9 +180,18 @@ const readData = async (force = false) => {
 
 const deleteData = async (uid, action, gameId = config.currentGame) => {
   const map = getDataMap(gameId)
-  const data = map.get(uid)
+  const targetUid = String(uid)
+  const data = map.get(targetUid)
   if (data) {
     data.deleted = action
+    const currentUid = String(config.getGameConfig(gameId).current || '')
+    if (action && currentUid === targetUid) {
+      const activeEntries = Array.from(map.entries()).filter(([, d]) => !d.deleted)
+      const nextUid = activeEntries.length ? activeEntries[0][0] : 0
+      config.setGameConfig(gameId, 'current', nextUid)
+    } else if (!action && (!currentUid || currentUid === '0')) {
+      config.setGameConfig(gameId, 'current', targetUid)
+    }
     await saveData(data, null, gameId)
   }
 }
@@ -306,9 +317,9 @@ const readLog = async (gameId = config.currentGame) => {
 }
 
 const fixAuthkey = (url) => {
-  const mr = url.match(/authkey=([^&]+)/)
+  const mr = url.match(/authkey=([^&#]+)/)
   if (mr && mr[1] && mr[1].includes('=') && !mr[1].includes('%')) {
-    return url.replace(/authkey=([^&]+)/, `authkey=${encodeURIComponent(mr[1])}`)
+    return url.replace(/authkey=([^&#]+)/, `authkey=${encodeURIComponent(mr[1])}`)
   }
   return url
 }
@@ -316,7 +327,14 @@ const fixAuthkey = (url) => {
 const getQuerystring = (url, gameId = config.currentGame) => {
   const text = i18n.forGame(gameId, config.lang).log
   const adapter = getGameAdapter(gameId)
-  const { searchParams, host } = new URL(fixAuthkey(url))
+  let parsed
+  try {
+    parsed = new URL(fixAuthkey(String(url || '').trim()))
+  } catch (e) {
+    sendMsg(text.url.incorrect)
+    return false
+  }
+  const { searchParams, host } = parsed
   apiDomainByGame[gameId] = adapter.getApiDomain(host)
   const authkey = searchParams.get('authkey')
   if (!authkey) {
@@ -438,27 +456,26 @@ const tryGetUid = async (queryString, gameId = config.currentGame) => {
   const adapter = getGameAdapter(gameId)
   const domain = apiDomainByGame[gameId] || adapter.defaultApiDomain
   const pageSize = adapter.pageSize || 6
-  try {
-    for (const [key] of adapter.defaultTypeMap) {
+  for (const [key] of adapter.defaultTypeMap) {
+    try {
       const baseUrl = adapter.getGachaLogUrl(domain, key, queryString)
-      const res = await request(`${baseUrl}&${adapter.queryParamKey}=${key}&page=1&size=${pageSize}`)
-      checkResStatus(res, gameId)
-      if (res.data && res.data.list && res.data.list.length && res.data.list[0].uid) {
+      const res = await request(`${baseUrl}&${adapter.queryParamKey}=${key}&page=1&size=${pageSize}&end_id=0`)
+      if (res?.retcode === 0 && res.data?.list?.length && res.data.list[0].uid) {
         return String(res.data.list[0].uid)
       }
+    } catch (e) {}
+  }
+  if (typeof adapter.getFallbackUidUrls === 'function') {
+    for (const fallbackUrl of adapter.getFallbackUidUrls(domain, queryString)) {
+      try {
+        const res = await request(fallbackUrl)
+        if (res?.retcode === 0 && res.data?.list?.length && res.data.list[0].uid) {
+          return String(res.data.list[0].uid)
+        }
+      } catch (e) {}
     }
-    if (typeof adapter.getFallbackUidUrls === 'function') {
-      for (const fallbackUrl of adapter.getFallbackUidUrls(domain, queryString)) {
-        try {
-          const res = await request(fallbackUrl)
-          if (res?.retcode === 0 && res.data?.list?.length && res.data.list[0].uid) {
-            return String(res.data.list[0].uid)
-          }
-        } catch (e) {}
-      }
-    }
-  } catch (e) {}
-  return config.getGameConfig(gameId).current
+  }
+  return ''
 }
 
 let proxyServerCreated = false
@@ -861,3 +878,5 @@ exports.changeCurrent = changeCurrent
 exports.switchGame = switchGame
 exports.convertTimeZone = convertTimeZone
 exports.migrateLegacyFiles = migrateLegacyFiles
+exports.tryGetUid = tryGetUid
+exports.fetchData = fetchData

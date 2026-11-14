@@ -89,8 +89,8 @@ module.exports = {
     }
     return entries
   },
-  urlRegex: /https?:\/\/[^\x00-\x20"'<>]+?(?:e20250716gacha|getBeyondGachaLog)[^\x00-\x20"'<>]*?authkey=[^&\x00-\x20"'<>]+[^\x00-\x20"'<>]*/g,
-  fallbackUrlRegex: /https?:\/\/[^\x00-\x20"'<>]+?auth_appid=webview_gacha[^\x00-\x20"'<>]*?authkey=[^\x00-\x20"'<>]*?game_biz=hk4e_\w+/g,
+  urlRegex: /https?:\/\/[^?\x00-\x20\x7f-\uffff"'<>]+?(?:e20250716gacha|getBeyondGachaLog)[^\x00-\x20\x7f-\uffff"'<>]*?authkey=[^&\x00-\x20\x7f-\uffff"'<>]+[^\x00-\x20\x7f-\uffff"'<>]*/g,
+  fallbackUrlRegex: /https?:\/\/[^?\x00-\x20\x7f-\uffff"'<>]+\?[^\x00-\x20\x7f-\uffff"'<>]*?auth_appid=webview_gacha[^\x00-\x20\x7f-\uffff"'<>]*?authkey=[^\x00-\x20\x7f-\uffff"'<>]*?game_biz=hk4e_\w+[^\x00-\x20\x7f-\uffff"'<>]*/g,
   cleanSearchParams(searchParams) {
     searchParams.delete('page')
     searchParams.delete('size')

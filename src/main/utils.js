@@ -289,6 +289,12 @@ const localIp = () => {
   return '127.0.0.1'
 }
 
+const normalizeCacheText = (rawText = '') => {
+  return String(rawText)
+    .replace(/[\x00-\x1f\x7f-\uffff]+/g, '\n')
+    .replace(/(?:1|0)\/0\/(?=https?:\/\/)/g, '\n')
+}
+
 async function getCacheText(gamePath) {
   const results = await glob(path.join(gamePath, '/webCaches{/,/*/}Cache/Cache_Data/data_2'), {
     stat: true,
@@ -303,7 +309,7 @@ async function getCacheText(gamePath) {
     .sort((a, b) => b.mtimeMs - a.mtimeMs)
     .map(p => p.fullpath())
   const cacheText = await fs.readFile(timeSortedFiles[0], 'utf8')
-  return [cacheText, timeSortedFiles[0]]
+  return [normalizeCacheText(cacheText), timeSortedFiles[0]]
 }
 
 const mapToObject = (map) => {
@@ -339,6 +345,7 @@ module.exports = {
   langMap,
   localeMap,
   fixLocalMap,
+  normalizeCacheText,
   getCacheText,
   appRoot,
   userDataPath,
