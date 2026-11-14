@@ -40,6 +40,10 @@ jobs:
       - name: Run tests
         run: yarn test
 
+      - name: Disable Spotlight indexing (macOS)
+        if: runner.os == 'macOS'
+        run: sudo mdutil -a -i off || true
+
       - name: Build App
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'

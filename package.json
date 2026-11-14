@@ -24,7 +24,7 @@
     "build:win32": "cross-env BUILD_TARGET=clean node .electron-vite/build.js && electron-builder --win --ia32 --publish never",
     "build:win64": "cross-env BUILD_TARGET=clean node .electron-vite/build.js && electron-builder --win --x64 --publish never",
     "build:linux": "cross-env BUILD_TARGET=clean node .electron-vite/build.js && electron-builder --linux --publish never",
-    "build:mac": "cross-env BUILD_TARGET=clean node .electron-vite/build.js && electron-builder --mac --x64 --publish never && electron-builder --mac --arm64 --publish never",
+    "build:mac": "node .electron-vite/patch-dmg-builder.js && cross-env BUILD_TARGET=clean node .electron-vite/build.js && electron-builder --mac --x64 --publish never && electron-builder --mac --arm64 --publish never",
     "build:dir": "cross-env BUILD_TARGET=clean node .electron-vite/build.js && electron-builder --dir --publish never",
     "build:clean": "cross-env BUILD_TARGET=onlyClean node .electron-vite/build.js",
     "build:web": "cross-env BUILD_TARGET=web node .electron-vite/build.js",
@@ -32,7 +32,7 @@
     "start": "electron ./src/main/main.js",
     "build-update": "node .electron-vite/update.js",
     "dep:upgrade": "yarn upgrade-interactive --latest",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "node .electron-vite/patch-dmg-builder.js && electron-builder install-app-deps"
   },
   "build": {
     "publish": null,
