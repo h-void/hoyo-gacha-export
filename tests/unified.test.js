@@ -716,3 +716,239 @@ describe('renderer gachaDetail statistics', () => {
     expect(st.typeMap2.get('装扮部件')).toBe(2)
   })
 })
+
+describe('regressions: bundler, soft-delete UID switching, Genshin UIGF merge & UID probing', () => {
+  test('Rollup main bundle contains zero unbundled relative require() specifiers', async () => {
+    const rollup = require('rollup')
+    const mainOptions = require('../.electron-vite/rollup.main.config')('development')
+    const bundle = await rollup.rollup({ ...mainOptions, onwarn: () => {} })
+    const { output } = await bundle.generate(mainOptions.output)
+    await bundle.close()
+
+    const code = output[0].code
+    const specifiers = [...code.matchAll(/require\(["']([^"']+)["']\)/g)].map(m => m[1])
+    const relativeRequires = specifiers.filter(spec => spec.startsWith('.'))
+    expect(relativeRequires).toEqual([])
+  }, 30000)
+
+  test('deleting the currently selected account switches current to remaining active UID or 0', async () => {
+    await saveData({
+      uid: '300000010',
+      lang: 'zh-cn',
+      time: Date.now(),
+      deleted: false,
+      typeMap: new Map([['2', '独家频段']]),
+      result: new Map([['2', []]])
+    }, null, 'zzz')
+    await saveData({
+      uid: '300000011',
+      lang: 'zh-cn',
+      time: Date.now(),
+      deleted: false,
+      typeMap: new Map([['2', '独家频段']]),
+      result: new Map([['2', []]])
+    }, null, 'zzz')
+    await readData(true)
+
+    config.setGameConfig('zzz', 'current', '300000010')
+    await config.save()
+
+    await deleteData('300000010', true, 'zzz')
+    expect(getDataPayload('zzz').current).not.toBe('300000010')
+    await readData(true)
+    const afterFirstDelete = getDataPayload('zzz')
+    expect(afterFirstDelete.current).not.toBe('300000010')
+    expect(afterFirstDelete.dataMap.get(afterFirstDelete.current)?.deleted).toBeFalsy()
+
+    // Delete all remaining active ZZZ accounts -> current must reset to 0
+    for (const acc of afterFirstDelete.allAccounts.zzz) {
+      await deleteData(acc.uid, true, 'zzz')
+    }
+    await readData(true)
+    expect(getDataPayload('zzz').current).toBe(0)
+
+    // Restoring an account when current is 0 selects it immediately
+    await deleteData('1300000003', false, 'zzz')
+    expect(getDataPayload('zzz').current).toBe('1300000003')
+  })
+
+  test('importing incremental Genshin UIGF v4.2 and v3.0 merges with existing local history', async () => {
+    await saveData({
+      uid: '100000888',
+      lang: 'zh-cn',
+      time: Date.now(),
+      deleted: false,
+      typeMap: new Map([['301', '角色活动祈愿']]),
+      result: new Map([
+        ['301', [['2023-01-01 10:00:00', '刻晴', '角色', 5, '301', '1672567200000000001']]]
+      ])
+    }, null, 'genshin')
+    await readData(true)
+
+    await importParsedJson({
+      info: {
+        export_timestamp: 1700000000,
+        export_app: 'test',
+        export_app_version: '1.0.0',
+        version: 'v4.2'
+      },
+      hk4e: [{
+        uid: '100000888',
+        timezone: 8,
+        lang: 'zh-cn',
+        list: [{
+          uigf_gacha_type: '301',
+          gacha_type: '400',
+          item_id: '10000042',
+          count: '1',
+          time: '2023-06-01 10:00:00',
+          name: '刻晴',
+          item_type: '角色',
+          rank_type: '5',
+          id: '1685613600000000002'
+        }]
+      }]
+    })
+
+    await importParsedJson({
+      info: {
+        uid: '100000888',
+        lang: 'zh-cn',
+        export_timestamp: 1700000001,
+        export_time: '2023-11-15 00:00:01',
+        export_app: 'test',
+        export_app_version: '1.0.0',
+        uigf_version: 'v3.0'
+      },
+      list: [{
+        uigf_gacha_type: '301',
+        gacha_type: '301',
+        item_id: '11401',
+        count: '1',
+        time: '2023-09-01 10:00:00',
+        name: '西风剑',
+        item_type: '武器',
+        rank_type: '4',
+        id: '1693562400000000003'
+      }]
+    })
+
+    const mergedPool = getData('genshin').dataMap.get('100000888').result.get('301')
+    expect(mergedPool.map(item => item[5])).toEqual([
+      '1672567200000000001',
+      '1685613600000000002',
+      '1693562400000000003'
+    ])
+  })
+
+  test('tryGetUid passes end_id=0, falls back to standard wish for Beyond, and prevents 0-pull account overwrite', async () => {
+    const http = require('http')
+    const { tryGetUid, fetchData } = require('../src/main/getData')
+    const beyondAdapter = getGameAdapter('beyond')
+    const origGetApiDomain = beyondAdapter.getApiDomain
+    const origDefaultDomain = beyondAdapter.defaultApiDomain
+
+    const requestedUrls = []
+    let mode = 'fallback-uid'
+
+    const server = http.createServer((req, res) => {
+      requestedUrls.push(req.url)
+      res.setHeader('Content-Type', 'application/json')
+      if (mode === 'fallback-uid') {
+        if (req.url.includes('getBeyondGachaLog')) {
+          res.end(JSON.stringify({ retcode: -1, message: 'empty beyond', data: null }))
+          return
+        }
+        if (req.url.includes('getGachaLog') && req.url.includes('gacha_type=301')) {
+          res.end(JSON.stringify({ retcode: 0, message: 'OK', data: { list: [{ uid: '100000777' }] } }))
+          return
+        }
+      }
+      res.end(JSON.stringify({ retcode: 0, message: 'OK', data: { list: [], region: 'cn_gf01' } }))
+    })
+
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+    const { port } = server.address()
+    const mockDomain = `http://127.0.0.1:${port}`
+
+    try {
+      beyondAdapter.getApiDomain = () => mockDomain
+      beyondAdapter.defaultApiDomain = mockDomain
+      getQuerystring(`${mockDomain}/event/e20250716gacha/index.html?authkey=testkey&lang=zh-cn`, 'beyond')
+
+      const fallbackUid = await tryGetUid('authkey=testkey&lang=zh-cn', 'beyond')
+      expect(fallbackUid).toBe('100000777')
+      expect(requestedUrls.some(u => u.includes('getBeyondGachaLog') && u.includes('end_id=0'))).toBe(true)
+
+      // Now simulate an account with 0 pulls everywhere while another account is active
+      mode = 'all-empty'
+      const savedUrl = 'https://public-operation-hk4e.mihoyo.com?authkey=original_owner'
+      await saveData({
+        uid: '100000004',
+        lang: 'zh-cn',
+        time: Date.now(),
+        deleted: false,
+        typeMap: new Map([['2000', '活动颂愿'], ['1000', '常驻颂愿']]),
+        result: new Map([['2000', []], ['1000', []]])
+      }, savedUrl, 'beyond')
+      config.setGameConfig('beyond', 'current', '100000004')
+      await config.save()
+
+      const emptyUid = await tryGetUid('authkey=empty_second_account&lang=zh-cn', 'beyond')
+      expect(emptyUid).toBe('')
+
+      await expect(
+        fetchData(`${mockDomain}/event/e20250716gacha/index.html?authkey=empty_second_account&lang=zh-cn`, 'beyond')
+      ).rejects.toThrow()
+
+      // Active account's encrypted URL must NOT be overwritten by the empty second account
+      expect(config.getUrlsMap('beyond').get('100000004')).toBe(savedUrl)
+    } finally {
+      beyondAdapter.getApiDomain = origGetApiDomain
+      beyondAdapter.defaultApiDomain = origDefaultDomain
+      await new Promise(resolve => server.close(resolve))
+    }
+  })
+
+  test('system-proxy is a safe no-op on non-Windows platforms', async () => {
+    if (process.platform !== 'win32') {
+      const { enableProxy, disableProxy, proxyStatus } = require('../src/main/module/system-proxy')
+      await expect(enableProxy('127.0.0.1', 8325)).resolves.toBeUndefined()
+      expect(proxyStatus.started).toBe(false)
+      await expect(disableProxy()).resolves.toBeUndefined()
+    }
+  })
+
+  test('extracts clean URLs across Genshin, HSR, ZZZ, and Beyond from packed data_2 binary cache and preserves authkey before #', () => {
+    const rawCache = utils.normalizeCacheText(
+      '1/0/https://sdk.mihoyo.com/agreement/index.html?bundle_id=1\x00\ufffd' +
+      '1/0/https://webstatic.mihoyo.com/csc/index.html?auth_appid=csc&authkey=wrong_csc_key\x00' +
+      '1/0/https://webstatic.mihoyo.com/hk4e/event/e20190909gacha-v3/index.html?auth_appid=webview_gacha&authkey=gs_key==&game_biz=hk4e_cn&lang=zh-cn#/log' +
+      '1/0/https://public-operation-hkrpg-sg.hoyoverse.com/common/gacha_record/api/getGachaLog?auth_appid=webview_gacha&authkey=hsr_key%2B1&game_biz=hkrpg_global&lang=en-us&end_id=0\x00\ufffd' +
+      '1/0/https://public-operation-nap-sg.hoyoverse.com/common/gacha_record/api/getGachaLog?auth_appid=webview_gacha&authkey=zzz_key%2B1&end_id=0&lang=ja-jp&game_biz=nap_global\x00\ufffd'
+    )
+
+    const gsMatches = rawCache.match(getGameAdapter('genshin').urlRegex)
+    expect(gsMatches).toEqual([
+      'https://webstatic.mihoyo.com/hk4e/event/e20190909gacha-v3/index.html?auth_appid=webview_gacha&authkey=gs_key==&game_biz=hk4e_cn&lang=zh-cn#/log'
+    ])
+    const gsParams = getQuerystring('https://webstatic.mihoyo.com/hk4e/event/gacha/index.html?lang=zh-cn&game_biz=hk4e_cn&authkey=raw+key==#/log', 'genshin')
+    expect(gsParams.get('authkey')).toBe('raw+key==')
+
+    const hsrMatches = rawCache.match(getGameAdapter('starrail').urlRegex)
+    expect(hsrMatches).toHaveLength(1)
+    const hsrParams = getQuerystring(hsrMatches[0], 'starrail')
+    expect(hsrParams.get('game_biz')).toBe('hkrpg_global')
+    expect(hsrParams.get('lang')).toBe('en-us')
+
+    const zzzMatches = rawCache.match(getGameAdapter('zzz').urlRegex)
+    expect(zzzMatches).toHaveLength(1)
+    const zzzParams = getQuerystring(zzzMatches[0], 'zzz')
+    expect(zzzParams.get('game_biz')).toBe('nap_global')
+    expect(zzzParams.get('lang')).toBe('ja-jp')
+    expect(zzzParams.get('authkey')).toBe('zzz_key+1')
+
+    // Malformed URL input must return false instead of throwing unhandled TypeError
+    expect(getQuerystring('not-a-valid-url', 'genshin')).toBe(false)
+  })
+})

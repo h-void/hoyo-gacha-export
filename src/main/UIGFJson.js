@@ -6,7 +6,7 @@ const fetch = require('electron-fetch').default
 const Ajv = require('ajv')
 const Ajv2020 = require('ajv/dist/2020')
 
-const { getData, getAllDataMaps, saveData, changeCurrent, getGachaType } = require('./getData')
+const { getData, getDataPayload, getAllDataMaps, saveData, changeCurrent, getGachaType } = require('./getData')
 const { version } = require('../../package.json')
 const config = require('./config')
 const i18n = require('./i18n')
@@ -514,15 +514,18 @@ const saveAndBackup = async (data, gameId) => {
 }
 
 const importGenshinUigf30 = async (importData) => {
+  const dataMap = getAllDataMaps().genshin
   const uid = String(importData.info.uid)
-  const lang = importData.info.lang || config.lang
+  const isNew = !dataMap.has(uid)
+  const existing = dataMap.get(uid)
+  const lang = importData.info.lang || existing?.lang || config.lang
   const gachaData = {
     result: new Map(),
     time: Date.now(),
     typeMap: getItemTypeNameMap(lang),
     uid,
     lang,
-    deleted: false
+    deleted: isNew ? false : Boolean(existing.deleted)
   }
   gachaData.typeMap.forEach((_, k) => gachaData.result.set(k, []))
   const sorted = [...importData.list].sort((a, b) => {
@@ -543,20 +546,24 @@ const importGenshinUigf30 = async (importData) => {
       item.id || ''
     ])
   }
+  gachaData.result = mergeData(existing, gachaData)
   await saveAndBackup(gachaData, 'genshin')
 }
 
 const importGenshinUigf4x = async (accounts) => {
+  const dataMap = getAllDataMaps().genshin
   for (const accountData of accounts) {
     const uid = String(accountData.uid)
-    const lang = accountData.lang || config.lang
+    const isNew = !dataMap.has(uid)
+    const existing = dataMap.get(uid)
+    const lang = accountData.lang || existing?.lang || config.lang
     const gachaData = {
       result: new Map(),
       time: Date.now(),
       typeMap: getItemTypeNameMap(lang),
       uid,
       lang,
-      deleted: false
+      deleted: isNew ? false : Boolean(existing.deleted)
     }
     gachaData.typeMap.forEach((_, k) => gachaData.result.set(k, []))
     const sorted = [...accountData.list].sort((a, b) => {
@@ -577,6 +584,7 @@ const importGenshinUigf4x = async (accounts) => {
         item.id || ''
       ])
     }
+    gachaData.result = mergeData(existing, gachaData)
     await saveAndBackup(gachaData, 'genshin')
   }
 }
@@ -801,7 +809,7 @@ const importJson = async () => {
     }
     return {
       importedGames,
-      ...require('./getData').getDataPayload(config.currentGame)
+      ...getDataPayload(config.currentGame)
     }
   } catch (error) {
     sendMsg(error, 'ERROR')
@@ -823,6 +831,7 @@ module.exports = {
   generateUigf30Json,
   generateUigf41Json,
   generateUigf42Json,
+  importJson,
   importParsedJson,
   importGenshinUigf30,
   importGenshinUigf4x,

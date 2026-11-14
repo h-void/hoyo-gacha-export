@@ -87,8 +87,8 @@ module.exports = {
     }
     return entries
   },
-  urlRegex: /https.+?authkey=.+?end_id=/g,
-  directLogUrlRegex: /https:\/\/[^\s"']*?authkey=[^\s"']+/g,
+  urlRegex: /https?:\/\/(?=[^\x00-\x20\x7f-\uffff"'<>]*?(?:-nap|\/nap\/|game_biz=nap_\w+|real_gacha_type=))[^?\x00-\x20\x7f-\uffff"'<>]+\?(?=[^\x00-\x20\x7f-\uffff"'<>]*?(?:auth_appid=webview_gacha|getGachaLog|end_id=|game_biz=nap_\w+))[^\x00-\x20\x7f-\uffff"'<>]*?authkey=[^&\x00-\x20\x7f-\uffff"'<>]+[^\x00-\x20\x7f-\uffff"'<>]*/g,
+  directLogUrlRegex: /https?:\/\/(?=[^\x00-\x20\x7f-\uffff"'<>]*?(?:-nap|\/nap\/|game_biz=nap_\w+|real_gacha_type=))[^?\x00-\x20\x7f-\uffff"'<>]+\?(?=[^\x00-\x20\x7f-\uffff"'<>]*?(?:auth_appid=webview_gacha|getGachaLog|end_id=|game_biz=nap_\w+))[^\x00-\x20\x7f-\uffff"'<>]*?authkey=[^&\x00-\x20\x7f-\uffff"'<>]+[^\x00-\x20\x7f-\uffff"'<>]*/g,
   cleanSearchParams(searchParams) {
     searchParams.delete('page')
     searchParams.delete('size')
