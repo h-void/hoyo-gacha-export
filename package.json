@@ -1,6 +1,6 @@
 {
   "name": "hoyo-gacha-export",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Unified 4-in-1 HoYoverse gacha history exporter for Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, and Miliastra Wonderland (千星奇域).",
   "main": "./dist/electron/main/main.js",
   "author": "h-void <118628214+h-void@users.noreply.github.com>",
