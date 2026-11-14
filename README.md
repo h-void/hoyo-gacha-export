@@ -1,61 +1,50 @@
-# 米哈游抽卡记录导出工具 (HoYo Gacha Export)
+# 米哈游抽卡记录导出工具
 
-简体中文 | [English](./docs/README_EN.md)
+中文 | [English](./docs/README_EN.md)
 
-基于 Electron + Vue 3 构建的米哈游四合一抽卡记录导出工具，支持 **《原神》**、**《崩坏：星穹铁道》**、**《绝区零》** 与 **《千星奇域》**（颂愿）。通过读取游戏本地日志或代理抓包获取记录链接，本地合并增量数据并导出为 Excel 或 UIGF JSON。
+这个项目基于 [genshin-wish-export](https://github.com/biuuu/genshin-wish-export)、[star-rail-warp-export](https://github.com/biuuu/star-rail-warp-export) 与 [zzz-signal-search-export](https://github.com/earthjasonlin/zzz-signal-search-export) 整合修改而来，支持 **《原神》**、**《崩坏：星穹铁道》**、**《绝区零》** 与 **《千星奇域》**（颂愿）。
 
-## 主要功能
+一个使用 Electron 制作的小工具，支持 Windows、macOS 与 Linux。
 
-- **四款游戏一站管理**：顶部标签一键切换《原神》《星穹铁道》《绝区零》《千星奇域》，各游戏数据、账号与配置自动隔离（兼容旧版单游戏数据自动迁移）。
-- **多格式导入导出**：
-  - 导出 **Excel (`.xlsx`)**：分卡池工作表 + 原始数据表，含保底统计与星级着色。
-  - 导出 **UIGF v4.2 / v3.0**：支持跨游戏勾选多个 UID 合并导出 UIGF v4.2 JSON。
-  - 导入兼容：支持 **UIGF v4.0–v4.2**、**UIGF v3.0**、**SRGF v1.0** 及旧版 `gacha-list-*.json`。
+通过读取游戏日志或者代理模式获取访问游戏抽卡记录 API 所需的 authKey，然后再使用获取到的 authKey 来读取游戏抽卡记录。
+
+工具会在 `userData` 文件夹里按游戏分目录保存数据，获取到新的记录时，会与本地数据合并后保存（支持导出 Excel 与跨游戏 UIGF v4.2 JSON）。
 
 ## 使用说明
 
-1. 从 [GitHub Releases](https://github.com/h-void/hoyo-gacha-export/releases) 下载对应平台版本并解压。
-2. 打开对应游戏的**抽卡历史记录 / 跃迁详情 / 调频详情 / 千星奇域颂愿历史**页面。
-3. 在工具顶部选择对应游戏，点击「**加载数据**」按钮：
+1. 下载工具后解压 - 下载地址: [GitHub Releases](https://github.com/h-void/hoyo-gacha-export/releases)
+2. 打开游戏的抽卡历史记录 / 跃迁详情 / 调频详情 / 千星奇域颂愿历史页面
+3. 在顶部选择对应游戏，点击工具的“加载数据”按钮
 
    ![加载数据](./docs/load-data.png)
 
-   如果日志模式未获取到链接，可在右上角「**选项**」中开启代理模式，再重新打开游戏内抽卡记录页面。
-4. 加载完成后点击「**导入/导出**」即可导出数据；如需导出同游戏多个账号，点击 UID 旁的 `+` 按钮，在游戏内切换账号并打开历史页面后再次点击「**加载数据**」。
+   如果没出什么问题的话，你会看到正在读取数据的提示。若日志读取未能获取到链接，可在右上角“选项”中开启代理模式后再次打开游戏内历史页面。
 
-## 开发与构建
+如果需要导出多个账号的数据，可以点击旁边的加号按钮。
 
-需要 Node.js (>= 22 LTS) 与 Yarn：
+然后游戏切换新账号，再打开抽卡历史记录，工具再点击“加载数据”按钮。
 
-```bash
-yarn install        # 安装依赖
-yarn dev            # 开发模式
-yarn test           # 运行单元测试
-yarn build:app      # 编译构建产物
-yarn build:win64    # 打包桌面端（另有 build:win32 / build:linux / build:mac）
-```
-
-<details>
-<summary>更新内置《星穹铁道》与《绝区零》物品 ID 映射表</summary>
-
-需要 Python 3（`requests`、`opencc`）：
+## Development
 
 ```bash
-python tools/getIdMap.py --game all
+# 安装模块
+yarn install
+
+# 开发模式
+yarn dev
+
+# 构建一个可以运行的程序
+yarn build
 ```
 
-</details>
+## 致谢
 
-## 致谢与上游项目
-
-本项目基于以下开源项目整合与二次开发，完整保留原作者版权声明：
-
-- **[@biuuu](https://github.com/biuuu)** — [`genshin-wish-export`](https://github.com/biuuu/genshin-wish-export) (`MIT License, Copyright (c) 2021 biuuu`)、[`star-rail-warp-export`](https://github.com/biuuu/star-rail-warp-export) (`MIT License, Copyright (c) 2023 biuuu`)
-- **[@earthjasonlin](https://github.com/earthjasonlin)** — [`zzz-signal-search-export`](https://github.com/earthjasonlin/zzz-signal-search-export) (`MIT License, Copyright (c) 2024 earthjasonlin`)
-- **[@Scighost](https://github.com/Scighost)** — [`Starward`](https://github.com/Scighost/Starward) (`MIT License`)
-- **[@GoneTone](https://github.com/GoneTone)** — [`genshin-impact-wish-gacha-analyzer`](https://github.com/GoneTone/genshin-impact-wish-gacha-analyzer) (`MIT License`)
-- **[@sunfkny](https://github.com/sunfkny)** — [`genshin-gacha-export-js`](https://github.com/sunfkny/genshin-gacha-export-js)
-- **[UIGF-org](https://uigf.org/)** — 统一可交换抽卡记录标准 (UIGF / SRGF)
+- [@biuuu](https://github.com/biuuu) — [genshin-wish-export](https://github.com/biuuu/genshin-wish-export) / [star-rail-warp-export](https://github.com/biuuu/star-rail-warp-export) (`MIT License`)
+- [@earthjasonlin](https://github.com/earthjasonlin) — [zzz-signal-search-export](https://github.com/earthjasonlin/zzz-signal-search-export) (`MIT License`)
+- [@Scighost](https://github.com/Scighost) — [Starward](https://github.com/Scighost/Starward) (`MIT License`)
+- [@GoneTone](https://github.com/GoneTone) — [genshin-impact-wish-gacha-analyzer](https://github.com/GoneTone/genshin-impact-wish-gacha-analyzer) (`MIT License`)
+- [@sunfkny](https://github.com/sunfkny) — [genshin-gacha-export-js](https://github.com/sunfkny/genshin-gacha-export-js)
+- [UIGF-org](https://uigf.org/)
 
 ## License
 
