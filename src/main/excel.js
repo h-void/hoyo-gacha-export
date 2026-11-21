@@ -49,13 +49,13 @@ const addRawSheet = (workbook, data) => {
         ])
       } else {
         rows.push([
-          log.gacha_id || log.schedule_id || '',
+          log.gacha_id || log.schedule_id || log.pool_id || '',
           log.op_gacha_type || log.gacha_type || poolKey,
           log.id || '',
           log.item_id || '',
-          log.item_type,
+          log.item_type || '',
           data.lang,
-          log.item_name || log.name,
+          log.item_name || log.name || '',
           String(log.rank_type),
           log.time,
           data.uid
@@ -86,11 +86,13 @@ const createWorkbookBuffer = async (data, gameId = config.currentGame, i18nBundl
   }
   const activeI18n = i18nBundle || i18n.forGame(gameId, config.lang)
   const { header, customFont, wish2 } = activeI18n.excel
-  const zzzLabels = activeI18n.ui.data
+  const rankLabels = activeI18n.ui.data
   const typeMap = getGachaType(data.lang, gameId)
   const workbook = new ExcelJS.Workbook()
   const isZzz = gameId === 'zzz'
   const isBeyond = gameId === 'beyond'
+  const isBh3 = gameId === 'bh3'
+  const isBlindBox = gameId === 'starrail_blindbox'
   const adapter = getGameAdapter(gameId)
   const usedSheetNames = new Set()
 
@@ -103,9 +105,10 @@ const createWorkbookBuffer = async (data, gameId = config.currentGame, i18nBundl
     usedSheetNames.add(sheetName)
 
     const sheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 1 }] })
-    let width = isBeyond ? [24, 24, 14, 8, 8, 8, 16] : [24, 14, 8, 8, 8, 8, 8]
+    const wideLayout = isBeyond || isBh3 || isBlindBox
+    let width = wideLayout ? [24, 24, 14, 12, 8, 8, 20] : [24, 14, 8, 8, 8, 8, 8]
     if (!data.lang || !data.lang.includes('zh-')) {
-      width = isBeyond ? [24, 32, 20, 12, 12, 12, 22] : [24, 32, 16, 12, 12, 12, 8]
+      width = wideLayout ? [24, 32, 20, 14, 12, 12, 24] : [24, 32, 16, 12, 12, 12, 8]
     }
     const excelKeys = ['time', 'name', 'type', 'rank', 'total', 'pity', 'remark']
     sheet.columns = excelKeys.map((colKey, index) => ({
@@ -140,13 +143,17 @@ const createWorkbookBuffer = async (data, gameId = config.currentGame, i18nBundl
         const rankStr = String(log.rank_type)
         const rankNum = parseInt(rankStr, 10) || rankStr
         const itemName = log.item_name || log.name || ''
-        let displayRank = isBeyond ? rankNum : rankStr
+        let displayRank = (isBeyond || isBlindBox) ? rankNum : rankStr
         if (isZzz) {
-          if (rankStr === '2') displayRank = zzzLabels.star2
-          else if (rankStr === '3') displayRank = zzzLabels.star3
-          else displayRank = zzzLabels.star4
+          if (rankStr === '2') displayRank = rankLabels.star2
+          else if (rankStr === '3') displayRank = rankLabels.star3
+          else displayRank = rankLabels.star4
+        } else if (isBh3) {
+          if (rankStr === '5') displayRank = rankLabels.star5 || '5'
+          else if (rankStr === '4') displayRank = rankLabels.star4 || '4'
+          else displayRank = rankLabels.star3 || '3'
         }
-        const row = [log.time, itemName, log.item_type, displayRank, total, pity]
+        const row = [log.time, itemName, log.item_type || '', displayRank, total, pity]
         if (isBeyond && key === '2000') {
           const opType = String(log.op_gacha_type || log.gacha_type || '')
           if (opType && opType !== '2000') {
@@ -155,6 +162,13 @@ const createWorkbookBuffer = async (data, gameId = config.currentGame, i18nBundl
               row.push(subLabel)
             }
           }
+        } else if (isBlindBox && log.blind_box_sub_rarity) {
+          const subLabel = adapter.getSubRarityLabel?.(log.blind_box_sub_rarity, data.lang || config.lang)
+          if (subLabel) {
+            row.push(subLabel)
+          }
+        } else if (isBh3 && log.raw_content) {
+          row.push(log.raw_content)
         }
         rows.push(row)
         rowRanks.push(rankStr)

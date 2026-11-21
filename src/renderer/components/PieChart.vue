@@ -39,6 +39,7 @@ const chart = ref(null)
 const standardColors = ['#fac858', '#ee6666', '#5470c6', '#91cc75', '#73c0de']
 const zzzColors = ['#fac858', '#fac858', '#ee6666', '#5470c6', '#5470c6', '#91cc75', '#73c0de']
 const beyondColors = ['#fac858', '#a256e1', '#5470c6', '#91cc75']
+const genericRankGames = new Set(['bh3', 'starrail_blindbox', 'petitplanet', 'nexusanima'])
 
 const parseData = (detail, poolKey, game) => {
   const text = props.i18n.ui.data
@@ -56,6 +57,28 @@ const parseData = (detail, poolKey, game) => {
     const hasTop = isStandard ? detail.count4 > 0 : detail.count5 > 0
     const selected = {
       [lowestName]: !hasTop
+    }
+    keys.forEach((key, index) => {
+      if (!detail[key[1]]) return
+      result.push({
+        value: detail[key[1]],
+        name: key[0]
+      })
+      color.push(beyondColors[index])
+    })
+    return [result, color, selected]
+  }
+
+  if (genericRankGames.has(game)) {
+    const keys = [
+      [text.star5, 'count5'],
+      [text.star4, 'count4'],
+      [text.star3, 'count3']
+    ]
+    const result = []
+    const color = []
+    const selected = {
+      [text.star3]: detail.count5 === 0
     }
     keys.forEach((key, index) => {
       if (!detail[key[1]]) return

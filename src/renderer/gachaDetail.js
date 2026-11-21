@@ -2,10 +2,21 @@ import { isWeapon, isCharacter, isBangboo } from './utils'
 
 const GAME_POOL_ORDER = {
   genshin: ['301', '302', '500', '200', '100'],
+  beyond: ['2000', '1000'],
   starrail: ['11', '12', '21', '22', '1', '2'],
+  starrail_blindbox: ['1001'],
   zzz: ['2', '3', '5', '102', '103', '1'],
-  beyond: ['2000', '1000']
+  bh3: ['bh3_char_a', 'bh3_char_b', 'bh3_equip_a', 'bh3_equip_b', 'bh3_astralop', 'bh3_outfit', 'bh3_dorm'],
+  petitplanet: ['hyg_event', 'hyg_standard'],
+  nexusanima: ['hna_event', 'hna_standard']
 }
+
+const GENERIC_RANK_GAMES = new Set([
+  'bh3',
+  'starrail_blindbox',
+  'petitplanet',
+  'nexusanima'
+])
 
 const itemCount = (map, name) => {
   if (!map.has(name)) {
@@ -32,6 +43,7 @@ const gachaDetail = (data, game = 'genshin') => {
   const detailMap = new Map()
   const isZzz = game === 'zzz'
   const isBeyond = game === 'beyond'
+  const isGenericRank = GENERIC_RANK_GAMES.has(game)
   const keys = getOrderKeys(data, game)
 
   for (const key of keys) {
@@ -48,21 +60,21 @@ const gachaDetail = (data, game = 'genshin') => {
           date: [],
           ssrPos: [], countMio: 0, total: value.length
         }
-      : isBeyond
-        ? {
-            count2: 0, count3: 0, count4: 0, count5: 0,
-            typeMap2: new Map(), typeMap3: new Map(), typeMap4: new Map(), typeMap5: new Map(),
-            date: [],
-            ssrPos: [], countMio: 0, total: value.length
-          }
-        : {
-            count3: 0, count4: 0, count5: 0,
-            count3w: 0, count4w: 0, count5w: 0, count4c: 0, count5c: 0,
-            weapon3: new Map(), weapon4: new Map(), weapon5: new Map(),
-            char4: new Map(), char5: new Map(),
-            date: [],
-            ssrPos: [], countMio: 0, total: value.length
-          }
+      : (isBeyond || isGenericRank)
+          ? {
+              count2: 0, count3: 0, count4: 0, count5: 0,
+              typeMap2: new Map(), typeMap3: new Map(), typeMap4: new Map(), typeMap5: new Map(),
+              date: [],
+              ssrPos: [], countMio: 0, total: value.length
+            }
+          : {
+              count3: 0, count4: 0, count5: 0,
+              count3w: 0, count4w: 0, count5w: 0, count4c: 0, count5c: 0,
+              weapon3: new Map(), weapon4: new Map(), weapon5: new Map(),
+              char4: new Map(), char5: new Map(),
+              date: [],
+              ssrPos: [], countMio: 0, total: value.length
+            }
 
     let lastSSR = 0
     let dateMin = 0
@@ -70,7 +82,7 @@ const gachaDetail = (data, game = 'genshin') => {
     const beyondTargetRank = String(key) === '1000' ? 4 : 5
 
     value.forEach((item, index) => {
-      let time, name, type, rank, wishType
+      let time, name, type, rank, wishType, subRarity
       if (Array.isArray(item)) {
         [time, name, type, rank, wishType] = item
       } else {
@@ -79,6 +91,7 @@ const gachaDetail = (data, game = 'genshin') => {
         type = item.item_type
         rank = item.rank_type
         wishType = item.op_gacha_type || item.gacha_type || key
+        subRarity = item.blind_box_sub_rarity || ''
       }
 
       const rankNum = parseInt(rank, 10)
@@ -147,6 +160,26 @@ const gachaDetail = (data, game = 'genshin') => {
         } else {
           detail.countMio++
         }
+      } else if (isGenericRank) {
+        const typeLabel = type || '-'
+        if (rankNum >= 5) {
+          detail.count5++
+          itemCount(detail.typeMap5, typeLabel)
+          const extra = game === 'starrail_blindbox'
+            ? (subRarity || typeLabel)
+            : (type || wishType || key)
+          detail.ssrPos.push([name, index + 1 - lastSSR, time, extra])
+          lastSSR = index + 1
+          detail.countMio = 0
+        } else if (rankNum === 4) {
+          detail.count4++
+          itemCount(detail.typeMap4, typeLabel)
+          detail.countMio++
+        } else {
+          detail.count3++
+          itemCount(detail.typeMap3, typeLabel)
+          detail.countMio++
+        }
       } else {
         if (rankNum === 3) {
           detail.count3++
@@ -190,5 +223,5 @@ const gachaDetail = (data, game = 'genshin') => {
   return detailMap
 }
 
-export { GAME_POOL_ORDER }
+export { GAME_POOL_ORDER, GENERIC_RANK_GAMES }
 export default gachaDetail

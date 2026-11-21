@@ -6,18 +6,18 @@
     </div>
     <el-form :model="settingForm" label-width="135px">
       <el-form-item :label="text.language">
-        <el-select @change="saveLang" v-model="settingForm.lang" class="!w-44">
+        <el-select @change="saveLang" v-model="settingForm.lang" class="w-44!">
           <el-option v-for="item of data.langMap" :key="item[0]" :label="item[1]" :value="item[0]"></el-option>
         </el-select>
         <p class="text-gray-400 text-xs m-1.5">{{text.languageHint}}</p>
       </el-form-item>
 
-      <el-form-item :label="text.logType">
+      <el-form-item v-if="!isPendingGame" :label="text.logType">
         <el-radio-group @change="saveSetting" v-model.number="settingForm.logType">
-          <el-radio-button :label="0">{{text.auto}}</el-radio-button>
-          <el-radio-button :label="1">{{text.cnServer}}</el-radio-button>
-          <el-radio-button :label="2">{{text.seaServer}}</el-radio-button>
-          <el-radio-button v-if="(activeGame === 'genshin' || activeGame === 'beyond') && settingForm.lang === 'zh-cn'" :label="3">{{ui.button.cloud}}</el-radio-button>
+          <el-radio-button :value="0">{{text.auto}}</el-radio-button>
+          <el-radio-button :value="1">{{text.cnServer}}</el-radio-button>
+          <el-radio-button :value="2">{{text.seaServer}}</el-radio-button>
+          <el-radio-button v-if="(activeGame === 'genshin' || activeGame === 'beyond') && settingForm.lang === 'zh-cn'" :value="3">{{ui.button.cloud}}</el-radio-button>
         </el-radio-group>
         <p class="text-gray-400 text-xs m-1.5">{{text.logTypeHint}}</p>
       </el-form-item>
@@ -51,18 +51,20 @@
         <el-switch @change="saveSetting" v-model="settingForm.autoUpdate"></el-switch>
       </el-form-item>
 
-      <el-form-item :label="text.hideHiddenPool">
+      <el-form-item v-if="hasHiddenPool" :label="text.hideHiddenPool">
         <el-switch @change="saveSetting" v-model="settingForm.hideHiddenPool"></el-switch>
       </el-form-item>
 
-      <el-form-item :label="text.fetchFullHistory">
+      <el-form-item v-if="!isPendingGame" :label="text.fetchFullHistory">
         <el-switch @change="saveSetting" v-model="settingForm.fetchFullHistory"></el-switch>
         <p class="text-gray-400 text-xs m-1.5">{{text.fetchFullHistoryHint}}</p>
       </el-form-item>
 
       <el-form-item :label="text.proxyMode">
-        <el-switch @change="saveSetting" v-model="settingForm.proxyMode"></el-switch>
-        <p class="text-gray-400 text-xs m-1.5">{{text.proxyModeHint}}</p>
+        <template v-if="!isPendingGame">
+          <el-switch @change="saveSetting" v-model="settingForm.proxyMode"></el-switch>
+          <p class="text-gray-400 text-xs m-1.5">{{text.proxyModeHint}}</p>
+        </template>
         <el-button class="focus:outline-none" @click="disableProxy">{{text.closeProxy}}</el-button>
         <p class="text-gray-400 text-xs m-1.5">{{text.closeProxyHint}}</p>
       </el-form-item>
@@ -102,6 +104,12 @@
             <a @click="openLink('https://github.com/GoneTone/genshin-impact-wish-gacha-analyzer')" class="cursor-pointer text-blue-500 hover:underline">GoneTone/genshin-impact-wish-gacha-analyzer</a>
             <span> (MIT — Ode pity & UID probing reference)</span>
           </li>
+          <li>
+            <a @click="openLink('https://github.com/Neroliu/BBBUID')" class="cursor-pointer text-blue-500 hover:underline">Neroliu/BBBUID</a>
+            <span> &amp; </span>
+            <a @click="openLink('https://github.com/YUYUYUYU2147/HoYoGet-Plugin')" class="cursor-pointer text-blue-500 hover:underline">YUYUYUYU2147/HoYoGet-Plugin</a>
+            <span> (Honkai Impact 3rd bh3_self_help_query reference)</span>
+          </li>
         </ul>
       </div>
     </div>
@@ -110,7 +118,12 @@
       <el-table :data="gachaDataInfo" border stripe max-height="360">
         <el-table-column :label="common.game" width="120">
           <template #default="scope">
-            <el-tag size="small" :type="gameTagType(scope.row.game)">{{ ui.game[scope.row.game] || scope.row.game }}</el-tag>
+            <el-tag size="small" :type="gameTagType(scope.row.game)">{{ getParentGameLabel(scope.row.game) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="common.type" width="135">
+          <template #default="scope">
+            <el-tag size="small" effect="plain" type="info">{{ getModeLabel(scope.row.game) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column property="uid" label="UID" width="130" />
@@ -139,7 +152,8 @@
 </template>
 
 <script setup>
-const { ipcRenderer, shell } = require('electron')
+const { ipcRenderer, shell } = window.require('electron')
+import gameCatalog from '../../games/catalog.json'
 import starrailIdJson from '../../games/starrail/idJson.json'
 import zzzIdJson from '../../games/zzz/idJson.json'
 import { version } from '../../../package.json'
@@ -160,6 +174,17 @@ const props = defineProps({
     default: false
   }
 })
+
+const PENDING_GAMES = new Set(['petitplanet', 'nexusanima'])
+const HIDDEN_POOL_GAMES = new Set(['genshin', 'starrail', 'zzz', 'beyond', 'bh3'])
+const ADAPTER_TO_PARENT_ID = {}
+const ADAPTER_TO_MODE_KEY = {}
+for (const entry of gameCatalog) {
+  for (const mode of entry.modes) {
+    ADAPTER_TO_PARENT_ID[mode.id] = entry.id
+    ADAPTER_TO_MODE_KEY[mode.id] = mode.modeKey
+  }
+}
 
 const data = reactive({
   langMap: new Map(),
@@ -185,7 +210,20 @@ const ui = computed(() => props.i18n.ui)
 const common = computed(() => props.i18n.ui.common)
 const text = computed(() => props.i18n.ui.setting)
 const about = computed(() => props.i18n.ui.about)
-const gameLabel = computed(() => props.i18n.ui.game[props.activeGame] || props.activeGame)
+
+const getParentGameLabel = (adapterId) => {
+  const parentId = ADAPTER_TO_PARENT_ID[adapterId] || adapterId
+  return props.i18n.ui.game[parentId] || parentId
+}
+
+const getModeLabel = (adapterId) => {
+  const modeKey = ADAPTER_TO_MODE_KEY[adapterId]
+  return (modeKey && props.i18n.ui.gameType?.[modeKey]) || adapterId
+}
+
+const gameLabel = computed(() => `${getParentGameLabel(props.activeGame)} · ${getModeLabel(props.activeGame)}`)
+const isPendingGame = computed(() => PENDING_GAMES.has(props.activeGame))
+const hasHiddenPool = computed(() => HIDDEN_POOL_GAMES.has(props.activeGame))
 
 const loadConfig = async () => {
   const config = await ipcRenderer.invoke('GET_CONFIG')
@@ -219,9 +257,11 @@ const disableProxy = async () => {
 const openLink = (link) => shell.openExternal(link)
 
 const gameTagType = (game) => {
-  if (game === 'starrail') return 'warning'
-  if (game === 'zzz') return 'success'
-  if (game === 'beyond') return 'danger'
+  const parentId = ADAPTER_TO_PARENT_ID[game] || game
+  if (parentId === 'starrail') return 'warning'
+  if (parentId === 'zzz') return 'success'
+  if (parentId === 'bh3') return 'danger'
+  if (PENDING_GAMES.has(parentId)) return 'info'
   return ''
 }
 

@@ -1,22 +1,52 @@
 <template>
   <div v-if="ui" class="relative">
-    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-      <el-radio-group
-        v-model="state.activeGame"
-        :disabled="state.status === 'loading'"
-        size="default"
-        @change="onGameChange"
-      >
-        <el-radio-button label="genshin">{{ ui.game.genshin }}</el-radio-button>
-        <el-radio-button label="starrail">{{ ui.game.starrail }}</el-radio-button>
-        <el-radio-button label="zzz">{{ ui.game.zzz }}</el-radio-button>
-        <el-radio-button label="beyond">{{ ui.game.beyond }}</el-radio-button>
-      </el-radio-group>
+    <!-- Level 1: Game Selector -->
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+      <div class="flex flex-wrap items-center gap-2">
+        <el-radio-group
+          :model-value="isPendingGame ? '' : activeParentGame.id"
+          :disabled="state.status === 'loading'"
+          size="default"
+          @change="onParentGameChange"
+        >
+          <el-radio-button v-for="gameItem in ACTIVE_PARENT_GAMES" :key="gameItem.id" :value="gameItem.id">
+            {{ ui.game[gameItem.id] }}
+          </el-radio-button>
+        </el-radio-group>
+
+        <el-dropdown :disabled="state.status === 'loading'" @command="onParentGameChange">
+          <el-button
+            :type="isPendingGame ? 'primary' : 'default'"
+            :plain="!isPendingGame"
+            class="focus:outline-none"
+          >
+            {{ isPendingGame ? ui.game[activeParentGame.id] : ui.gameGroup.more }}
+            <el-icon class="el-icon--right"><arrow-down /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item
+                v-for="item in PENDING_PARENT_GAMES"
+                :key="item.id"
+                :command="item.id"
+                :class="{ 'font-semibold text-blue-600': activeParentGame.id === item.id }"
+              >
+                <div class="flex items-center justify-between gap-3 w-full">
+                  <span>{{ ui.game[item.id] }}</span>
+                  <el-tag size="small" :type="item.tagType" effect="plain">
+                    {{ ui.gameStatus[item.statusKey] }}
+                  </el-tag>
+                </div>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </div>
 
       <div class="flex items-center gap-2">
         <el-select
           v-if="state.status !== 'loading' && dataMap && (dataMap.size > 1 || (dataMap.size >= 1 && state.current === 0))"
-          class="!w-40"
+          class="w-40!"
           @change="changeCurrent"
           :model-value="uidSelectText"
         >
@@ -34,23 +64,43 @@
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="setting" icon="setting">{{ ui.button.setting }}</el-dropdown-item>
-              <el-dropdown-item :disabled="!allowClick() || state.status === 'loading'" command="url" icon="link">{{ ui.button.url }}</el-dropdown-item>
-              <el-dropdown-item command="copyUrl" icon="DocumentCopy">{{ ui.button.copyUrl }}</el-dropdown-item>
-              <el-dropdown-item command="copyApiUrl" icon="Link">{{ ui.button.copyApiUrl }}</el-dropdown-item>
-              <el-dropdown-item :disabled="!allowClick() || state.status === 'loading'" command="proxy" icon="position">{{ ui.button.startProxy }}</el-dropdown-item>
+              <el-dropdown-item :disabled="isPendingGame || !allowClick() || state.status === 'loading'" command="url" icon="link">{{ ui.button.url }}</el-dropdown-item>
+              <el-dropdown-item :disabled="isPendingGame" command="copyUrl" icon="DocumentCopy">{{ ui.button.copyUrl }}</el-dropdown-item>
+              <el-dropdown-item :disabled="isPendingGame" command="copyApiUrl" icon="Link">{{ ui.button.copyApiUrl }}</el-dropdown-item>
+              <el-dropdown-item :disabled="isPendingGame || !allowClick() || state.status === 'loading'" command="proxy" icon="position">{{ ui.button.startProxy }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
       </div>
     </div>
 
-    <div class="flex flex-wrap items-center justify-between gap-2">
+    <!-- Level 2: Record / Gacha Type Selector under Active Game -->
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-gray-100">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-xs text-gray-500">{{ ui.gameType.label }}{{ state.i18n.symbol.colon }}</span>
+        <el-radio-group
+          :model-value="state.activeGame"
+          :disabled="state.status === 'loading'"
+          size="small"
+          @change="onGameChange"
+        >
+          <el-radio-button
+            v-for="mode in activeParentGame.modes"
+            :key="mode.id"
+            :value="mode.id"
+          >
+            {{ ui.gameType[mode.modeKey] || mode.modeKey }}
+          </el-radio-button>
+        </el-radio-group>
+      </div>
+
       <div class="flex flex-wrap items-center gap-2">
         <el-button
           type="primary"
+          size="small"
           :icon="state.status === 'init' ? 'milk-tea' : 'refresh-right'"
           class="focus:outline-none"
-          :disabled="!allowClick() || state.status === 'loading'"
+          :disabled="isPendingGame || !allowClick() || state.status === 'loading'"
           plain
           @click="fetchData()"
           :loading="state.status === 'loading'"
@@ -59,26 +109,27 @@
         </el-button>
 
         <el-dropdown @command="exportCommand">
-          <el-button icon="folder-opened" class="focus:outline-none" type="success" plain>
+          <el-button size="small" icon="folder-opened" class="focus:outline-none" type="success" plain>
             {{ ui.button.files }}
             <el-icon class="el-icon--right"><arrow-down /></el-icon>
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item :disabled="!gachaData" command="excel">{{ ui.button.excel }}</el-dropdown-item>
-              <el-dropdown-item :disabled="!hasAnyAccounts" command="uigf-json">{{ ui.button.uigf }}</el-dropdown-item>
+              <el-dropdown-item :disabled="!hasAnyUigfAccounts" command="uigf-json">{{ ui.button.uigf }}</el-dropdown-item>
+              <el-dropdown-item :disabled="!gachaData" command="export-game-json">{{ ui.button.exportGameJson }}</el-dropdown-item>
               <el-dropdown-item v-if="state.activeGame === 'genshin' && gachaData" command="uigf-v30">{{ ui.setting.uigf30Export }}</el-dropdown-item>
               <el-dropdown-item command="import-json" divided>{{ ui.button.import }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
 
-        <el-tooltip v-if="detail && state.status !== 'loading'" :content="ui.hint.newAccount" placement="bottom">
-          <el-button @click="newUser()" plain icon="plus" class="focus:outline-none"></el-button>
+        <el-tooltip v-if="!isPendingGame && detail && state.status !== 'loading'" :content="ui.hint.newAccount" placement="bottom">
+          <el-button size="small" @click="newUser()" plain icon="plus" class="focus:outline-none"></el-button>
         </el-tooltip>
 
         <el-tooltip v-if="state.status === 'updated'" :content="ui.hint.relaunchHint" placement="bottom">
-          <el-button @click="relaunch()" type="success" icon="refresh" class="focus:outline-none">
+          <el-button size="small" @click="relaunch()" type="success" icon="refresh" class="focus:outline-none">
             {{ ui.button.directUpdate }}
           </el-button>
         </el-tooltip>
@@ -96,12 +147,47 @@
       </el-button>
     </p>
 
-    <div v-if="detail" class="gap-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 2xl:grid-cols-4">
+    <!-- Optional Level 3: Banner Type Filter when multiple banner pools exist -->
+    <div v-if="visibleDetailEntries.length > 1" class="flex flex-wrap items-center gap-1.5 mb-3">
+      <span class="text-xs text-gray-400">{{ ui.gameType.poolFilter }}{{ state.i18n.symbol.colon }}</span>
+      <el-check-tag
+        :checked="state.selectedPool === 'all'"
+        size="small"
+        @change="state.selectedPool = 'all'"
+      >
+        {{ ui.gameType.allPools }}
+      </el-check-tag>
+      <el-check-tag
+        v-for="entry in visibleDetailEntries"
+        :key="`filter-${entry[0]}`"
+        :checked="state.selectedPool === entry[0]"
+        size="small"
+        @change="state.selectedPool = state.selectedPool === entry[0] ? 'all' : entry[0]"
+      >
+        {{ typeMap.get(entry[0]) || entry[0] }} ({{ entry[1].total }})
+      </el-check-tag>
+    </div>
+
+    <div
+      v-if="isPendingGame && !detail && ui.pending"
+      class="mt-4 p-5 rounded-lg border border-gray-200 bg-gray-50 max-w-2xl"
+    >
+      <div class="flex flex-wrap items-center gap-2 mb-2">
+        <h3 class="text-base font-medium text-gray-800">{{ ui.pending.title }}</h3>
+        <el-tag size="small" type="warning" effect="plain">{{ ui.pending.badge }}</el-tag>
+      </div>
+      <p class="text-xs text-gray-600 leading-relaxed mb-2">{{ ui.pending.description }}</p>
+      <p class="text-xs text-gray-500 leading-relaxed mb-4">{{ ui.pending.capabilities }}</p>
+      <el-button type="primary" plain icon="folder-opened" @click="importData">
+        {{ ui.button.import }}
+      </el-button>
+    </div>
+
+    <div v-if="displayedDetailEntries.length" class="gap-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 2xl:grid-cols-4">
       <div
-        v-for="item of detail"
+        v-for="item of displayedDetailEntries"
         :key="`${state.activeGame}-${state.current}-${item[0]}`"
         class="mb-4"
-        :class="{ hidden: isHiddenPool(item[0]) }"
       >
         <p class="text-center text-gray-600 my-2 font-medium">{{ typeMap.get(item[0]) || item[0] }}</p>
         <pie-chart :data="item" :i18n="state.i18n" :typeMap="typeMap" :game="state.activeGame"></pie-chart>
@@ -137,9 +223,9 @@
           <el-checkbox v-model="selectAllUigf">{{ ui.uigf.selectAll }}</el-checkbox>
           <el-checkbox v-model="state.config.readableJSON" @change="saveReadableSetting">{{ ui.setting.uigfReadable }}</el-checkbox>
         </div>
-        <div v-for="gId in GAME_LIST" :key="gId">
+        <div v-for="gId in UIGF_GAME_LIST" :key="gId">
           <template v-if="state.allAccounts[gId] && state.allAccounts[gId].length">
-            <p class="text-xs font-medium text-gray-500 mb-1">{{ ui.game[gId] }}</p>
+            <p class="text-xs font-medium text-gray-500 mb-1">{{ formatGameAndMode(gId) }}</p>
             <div class="space-y-1 pl-2">
               <div v-for="acc in state.allAccounts[gId]" :key="`${gId}:${acc.uid}`" class="flex items-center justify-between text-xs">
                 <el-checkbox
@@ -177,38 +263,76 @@
 </template>
 
 <script setup>
-const { ipcRenderer } = require('electron')
+const { ipcRenderer } = window.require('electron')
 import { reactive, computed, onMounted } from 'vue'
 import PieChart from './components/PieChart.vue'
 import GachaDetail from './components/GachaDetail.vue'
 import Setting from './components/Setting.vue'
 import gachaDetail from './gachaDetail'
 import { version } from '../../package.json'
+import gameCatalog from '../games/catalog.json'
 import genshinGachaType from '../games/genshin/gachaType.json'
-import starrailGachaType from '../games/starrail/gachaType.json'
-import zzzGachaType from '../games/zzz/gachaType.json'
 import beyondGachaType from '../games/beyond/gachaType.json'
+import starrailGachaType from '../games/starrail/gachaType.json'
+import starrailBlindboxGachaType from '../games/starrail_blindbox/gachaType.json'
+import zzzGachaType from '../games/zzz/gachaType.json'
+import bh3GachaType from '../games/bh3/gachaType.json'
+import petitplanetGachaType from '../games/petitplanet/gachaType.json'
+import nexusanimaGachaType from '../games/nexusanima/gachaType.json'
 import { ElMessage } from 'element-plus'
 
 const starrailGachaTypeMap = new Map(starrailGachaType)
 const zzzGachaTypeMap = new Map(zzzGachaType)
 
-const GAME_LIST = ['genshin', 'starrail', 'zzz', 'beyond']
+const ACTIVE_PARENT_GAMES = gameCatalog.filter(g => g.group === 'active')
+const PENDING_PARENT_GAMES = gameCatalog.filter(g => g.group === 'pending')
+const PENDING_GAME_SET = new Set(PENDING_PARENT_GAMES.flatMap(g => g.modes.map(m => m.id)))
+const UIGF_GAME_LIST = ['genshin', 'beyond', 'starrail', 'zzz']
+
+const ADAPTER_TO_PARENT = {}
+const ADAPTER_TO_MODE_KEY = {}
+for (const entry of gameCatalog) {
+  for (const mode of entry.modes) {
+    ADAPTER_TO_PARENT[mode.id] = entry
+    ADAPTER_TO_MODE_KEY[mode.id] = mode.modeKey
+  }
+}
 
 const HIDDEN_POOL_KEYS = {
   genshin: '100',
   starrail: '2',
   zzz: '1',
-  beyond: '1000'
+  beyond: '1000',
+  bh3: 'bh3_dorm'
+}
+
+const OBJECT_GACHA_TYPE_TABLES = {
+  genshin: genshinGachaType,
+  beyond: beyondGachaType,
+  starrail_blindbox: starrailBlindboxGachaType,
+  bh3: bh3GachaType,
+  petitplanet: petitplanetGachaType,
+  nexusanima: nexusanimaGachaType
 }
 
 const state = reactive({
   activeGame: 'genshin',
+  lastModeByParent: {},
+  selectedPool: 'all',
   status: 'init',
   log: '',
   dataMap: new Map(),
   current: 0,
-  allAccounts: { genshin: [], starrail: [], zzz: [], beyond: [] },
+  allAccounts: {
+    genshin: [],
+    beyond: [],
+    starrail: [],
+    starrail_blindbox: [],
+    zzz: [],
+    bh3: [],
+    petitplanet: [],
+    nexusanima: []
+  },
   allDataList: [],
   showSetting: false,
   i18n: null,
@@ -221,6 +345,18 @@ const state = reactive({
   newVersion: '',
   config: {}
 })
+
+const activeParentGame = computed(() => ADAPTER_TO_PARENT[state.activeGame] || gameCatalog[0])
+const isPendingGame = computed(() => PENDING_GAME_SET.has(state.activeGame))
+
+const formatGameAndMode = (adapterId) => {
+  if (!ui.value) return adapterId
+  const parent = ADAPTER_TO_PARENT[adapterId]
+  const modeKey = ADAPTER_TO_MODE_KEY[adapterId]
+  const parentName = ui.value.game[parent?.id || adapterId] || adapterId
+  const modeName = modeKey ? ui.value.gameType?.[modeKey] : ''
+  return modeName ? `${parentName} · ${modeName}` : parentName
+}
 
 const dataMap = computed(() => {
   const result = new Map()
@@ -243,8 +379,8 @@ const allDataInfo = computed(() => {
   return list
 })
 
-const hasAnyAccounts = computed(() => {
-  return GAME_LIST.some(gId => (state.allAccounts[gId] || []).length > 0)
+const hasAnyUigfAccounts = computed(() => {
+  return UIGF_GAME_LIST.some(gId => (state.allAccounts[gId] || []).length > 0)
 })
 
 const ui = computed(() => state.i18n?.ui)
@@ -272,7 +408,8 @@ const allowClick = () => {
 }
 
 const isHiddenPool = (poolKey) => {
-  return Boolean(state.config.hideHiddenPool && poolKey === HIDDEN_POOL_KEYS[state.activeGame])
+  const hiddenKey = HIDDEN_POOL_KEYS[state.activeGame]
+  return Boolean(hiddenKey && state.config.hideHiddenPool && poolKey === hiddenKey)
 }
 
 const hint = computed(() => {
@@ -304,18 +441,45 @@ const detail = computed(() => {
   return null
 })
 
+const visibleDetailEntries = computed(() => {
+  if (!detail.value) return []
+  return Array.from(detail.value.entries()).filter(([key]) => !isHiddenPool(key))
+})
+
+const displayedDetailEntries = computed(() => {
+  if (!visibleDetailEntries.value.length) return []
+  if (state.selectedPool === 'all') return visibleDetailEntries.value
+  const matched = visibleDetailEntries.value.filter(([key]) => key === state.selectedPool)
+  return matched.length ? matched : visibleDetailEntries.value
+})
+
 const typeMap = computed(() => {
   const lang = state.config.lang || 'zh-cn'
   const result = new Map()
+  // Start with persisted per-account pool names (important for dynamic BH3 / BlindBox pools)
+  const storedTypeMap = gachaData.value?.typeMap
+  if (storedTypeMap instanceof Map) {
+    for (const [k, v] of storedTypeMap.entries()) {
+      result.set(k, v)
+    }
+  } else if (Array.isArray(storedTypeMap)) {
+    for (const pair of storedTypeMap) {
+      if (Array.isArray(pair) && pair.length >= 2) {
+        result.set(pair[0], pair[1])
+      }
+    }
+  }
+
   let list = null
-  if (state.activeGame === 'genshin') {
-    list = genshinGachaType[lang] || genshinGachaType['en-us'] || genshinGachaType['zh-cn']
-  } else if (state.activeGame === 'starrail') {
+  if (state.activeGame === 'starrail') {
     list = starrailGachaTypeMap.get(lang) || starrailGachaTypeMap.get('en-us') || starrailGachaTypeMap.get('zh-cn')
-  } else if (state.activeGame === 'beyond') {
-    list = beyondGachaType[lang] || beyondGachaType['en-us'] || beyondGachaType['zh-cn']
-  } else {
+  } else if (state.activeGame === 'zzz') {
     list = zzzGachaTypeMap.get(lang) || zzzGachaTypeMap.get('en-us') || zzzGachaTypeMap.get('zh-cn')
+  } else {
+    const table = OBJECT_GACHA_TYPE_TABLES[state.activeGame]
+    if (table) {
+      list = table[lang] || table['en-us'] || table['zh-cn']
+    }
   }
   if (list) {
     for (const { key, name } of list) {
@@ -328,6 +492,11 @@ const typeMap = computed(() => {
 const applyPayload = (payload) => {
   if (!payload) return
   state.activeGame = payload.game || state.activeGame
+  const parent = ADAPTER_TO_PARENT[state.activeGame]
+  if (parent) {
+    state.lastModeByParent[parent.id] = state.activeGame
+  }
+  state.selectedPool = 'all'
   state.dataMap = payload.dataMap || new Map()
   state.current = payload.current || 0
   if (payload.allAccounts) {
@@ -344,6 +513,7 @@ const applyPayload = (payload) => {
 }
 
 const fetchData = async (url) => {
+  if (isPendingGame.value) return
   state.log = ''
   state.status = 'loading'
   const data = await ipcRenderer.invoke('FETCH_DATA', url)
@@ -362,9 +532,18 @@ const readData = async (force = false) => {
   }
 }
 
+const onParentGameChange = async (parentId) => {
+  const entry = gameCatalog.find(g => g.id === parentId)
+  if (!entry || !entry.modes.length) return
+  const targetMode = state.lastModeByParent[parentId] || entry.modes[0].id
+  await onGameChange(targetMode)
+}
+
 const onGameChange = async (gameId) => {
+  if (!gameId) return
   state.authkeyTimeout = false
   state.log = ''
+  state.selectedPool = 'all'
   const payload = await ipcRenderer.invoke('SWITCH_GAME', gameId)
   applyPayload(payload)
   await updateConfig()
@@ -398,7 +577,7 @@ const toggleUigfSelection = (game, uid, checked) => {
 
 const allAvailableUigfAccounts = computed(() => {
   const out = []
-  for (const gId of GAME_LIST) {
+  for (const gId of UIGF_GAME_LIST) {
     for (const acc of state.allAccounts[gId] || []) {
       out.push({ game: gId, uid: acc.uid })
     }
@@ -422,7 +601,7 @@ const saveReadableSetting = async () => {
 
 const openUigfDialog = () => {
   state.uigfSelections = []
-  if (state.current && dataMap.value.has(state.current)) {
+  if (UIGF_GAME_LIST.includes(state.activeGame) && state.current && dataMap.value.has(state.current)) {
     state.uigfSelections.push({ game: state.activeGame, uid: String(state.current) })
   } else {
     state.uigfSelections = allAvailableUigfAccounts.value.map(item => ({ ...item }))
@@ -438,6 +617,15 @@ const confirmUigfExport = async () => {
   state.showUigfDlg = false
   try {
     await ipcRenderer.invoke('EXPORT_UIGF_JSON', state.uigfSelections.map(item => ({ ...item })), '4.2')
+    ElMessage.success(ui.value.uigf.exportSuccess)
+  } catch (e) {
+    ElMessage.error(e.message || String(e))
+  }
+}
+
+const exportGameJson = async () => {
+  try {
+    await ipcRenderer.invoke('EXPORT_GAME_JSON', state.activeGame, state.current || null)
     ElMessage.success(ui.value.uigf.exportSuccess)
   } catch (e) {
     ElMessage.error(e.message || String(e))
@@ -480,6 +668,8 @@ const exportCommand = (type) => {
     saveExcel()
   } else if (type === 'uigf-json') {
     openUigfDialog()
+  } else if (type === 'export-game-json') {
+    exportGameJson()
   } else if (type === 'uigf-v30') {
     exportGenshinV30()
   } else if (type === 'import-json') {
@@ -492,6 +682,7 @@ const openCacheFolder = async () => {
 }
 
 const changeCurrent = async (uid) => {
+  state.selectedPool = 'all'
   if (uid === 0) {
     state.status = 'init'
   } else {
@@ -526,9 +717,11 @@ const optionCommand = (type) => {
   if (type === 'setting') {
     showSetting(true)
   } else if (type === 'url') {
+    if (isPendingGame.value) return
     state.urlInput = ''
     state.showUrlDlg = true
   } else if (type === 'proxy') {
+    if (isPendingGame.value) return
     fetchData('proxy')
   } else if (type === 'copyUrl') {
     copyUrl()
@@ -557,14 +750,18 @@ const copyApiUrl = async () => {
 
 const setTitle = () => {
   if (!state.i18n) return
-  const gameTitle = state.i18n.ui.game[state.activeGame] || ''
-  document.title = `${state.i18n.ui.win.appTitle} (${gameTitle}) - v${version}`
+  const label = formatGameAndMode(state.activeGame)
+  document.title = `${state.i18n.ui.win.appTitle} (${label}) - v${version}`
 }
 
 const updateConfig = async () => {
   state.config = await ipcRenderer.invoke('GET_CONFIG')
   if (state.config?.currentGame) {
     state.activeGame = state.config.currentGame
+    const parent = ADAPTER_TO_PARENT[state.activeGame]
+    if (parent) {
+      state.lastModeByParent[parent.id] = state.activeGame
+    }
   }
 }
 

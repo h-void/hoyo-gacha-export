@@ -1,10 +1,16 @@
 const path = require('path')
+const { builtinModules } = require('module')
 const { nodeResolve } = require('@rollup/plugin-node-resolve')
 const commonjs = require('@rollup/plugin-commonjs')
 const esbuild = require('rollup-plugin-esbuild').default
 const alias = require('@rollup/plugin-alias')
 const json = require('@rollup/plugin-json')
 const { version } = require('../package.json')
+
+const nodeExternals = [
+  ...builtinModules,
+  ...builtinModules.map(mod => `node:${mod}`)
+]
 
 module.exports = (env = 'production') => {
   return {
@@ -16,8 +22,20 @@ module.exports = (env = 'production') => {
       sourcemap: false,
       exports: 'auto'
     },
+    onwarn(warning, warn) {
+      if (warning.code === 'CIRCULAR_DEPENDENCY' && warning.ids && warning.ids.every(id => id.includes('node_modules'))) {
+        return
+      }
+      warn(warning)
+    },
     plugins: [
-      nodeResolve({ jsnext: true, preferBuiltins: true, browser: true }),
+      alias({
+        entries: [
+          { find: '@main', replacement: path.join(__dirname, '../src/main') },
+          { find: '@games', replacement: path.join(__dirname, '../src/games') }
+        ]
+      }),
+      nodeResolve({ preferBuiltins: true }),
       commonjs(),
       json(),
       esbuild({
@@ -25,35 +43,17 @@ module.exports = (env = 'production') => {
         exclude: /node_modules/,
         sourceMap: false,
         minify: env === 'production',
-        target: 'esnext',
+        target: 'node22',
         define: {
           __VERSION__: JSON.stringify(version)
         },
         loaders: {
-          '.json': 'json',
-          '.js': 'jsx'
+          '.json': 'json'
         }
-      }),
-      alias({
-        entries: [
-          { find: '@main', replacement: path.join(__dirname, '../src/main') },
-          { find: '@games', replacement: path.join(__dirname, '../src/games') }
-        ]
       })
     ],
     external: [
-      'crypto',
-      'assert',
-      'fs',
-      'util',
-      'os',
-      'events',
-      'child_process',
-      'http',
-      'https',
-      'path',
-      'stream',
-      'url',
+      ...nodeExternals,
       'electron',
       'original-fs'
     ]

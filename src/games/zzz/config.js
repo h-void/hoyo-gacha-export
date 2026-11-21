@@ -35,6 +35,7 @@ function getGachaType(lang, detectLocaleFn) {
 
 module.exports = {
   id: 'zzz',
+  availability: 'active',
   uigfKey: 'nap',
   order,
   hiddenPoolKey: '1',
@@ -45,6 +46,12 @@ module.exports = {
   queryParamKey: 'real_gacha_type',
   defaultApiDomain: 'https://public-operation-nap.mihoyo.com',
   getApiDomain(host = '') {
+    if (host.includes('public-operation-common-sg')) {
+      return 'https://public-operation-common-sg.hoyoverse.com'
+    }
+    if (host.includes('public-operation-common')) {
+      return 'https://public-operation-common.mihoyo.com'
+    }
     if (
       host.includes('webstatic-sea') ||
       host.includes('api-os-takumi') ||
@@ -87,8 +94,8 @@ module.exports = {
     }
     return entries
   },
-  urlRegex: /https?:\/\/(?=[^\x00-\x20\x7f-\uffff"'<>]*?(?:-nap|\/nap\/|game_biz=nap_\w+|real_gacha_type=))[^?\x00-\x20\x7f-\uffff"'<>]+\?(?=[^\x00-\x20\x7f-\uffff"'<>]*?(?:auth_appid=webview_gacha|getGachaLog|end_id=|game_biz=nap_\w+))[^\x00-\x20\x7f-\uffff"'<>]*?authkey=[^&\x00-\x20\x7f-\uffff"'<>]+[^\x00-\x20\x7f-\uffff"'<>]*/g,
-  directLogUrlRegex: /https?:\/\/(?=[^\x00-\x20\x7f-\uffff"'<>]*?(?:-nap|\/nap\/|game_biz=nap_\w+|real_gacha_type=))[^?\x00-\x20\x7f-\uffff"'<>]+\?(?=[^\x00-\x20\x7f-\uffff"'<>]*?(?:auth_appid=webview_gacha|getGachaLog|end_id=|game_biz=nap_\w+))[^\x00-\x20\x7f-\uffff"'<>]*?authkey=[^&\x00-\x20\x7f-\uffff"'<>]+[^\x00-\x20\x7f-\uffff"'<>]*/g,
+  urlRegex: /https?:\/\/(?![^\x00-\x20\x7f-\uffff"'<>]*?(?:bh3_self_help_query|hkrpg_gacha_record|getBeyondGachaLog|game_biz=(?:hk4e|hkrpg|bh3)_))(?=[^\x00-\x20\x7f-\uffff"'<>]*?(?:-nap|\/nap\/|e20230424gacha|game_biz=nap_\w+|real_gacha_type=|\/common\/gacha_record\/api\/getGachaLog))[^?\x00-\x20\x7f-\uffff"'<>]+\?(?=[^\x00-\x20\x7f-\uffff"'<>]*?(?:auth_appid=webview_gacha|getGachaLog|e20230424gacha|end_id=|game_biz=nap_\w+))[^\x00-\x20\x7f-\uffff"'<>]*?authkey=[^&\x00-\x20\x7f-\uffff"'<>]+[^\x00-\x20\x7f-\uffff"'<>]*/g,
+  directLogUrlRegex: /https?:\/\/(?![^\x00-\x20\x7f-\uffff"'<>]*?(?:bh3_self_help_query|hkrpg_gacha_record|getBeyondGachaLog|game_biz=(?:hk4e|hkrpg|bh3)_))(?=[^\x00-\x20\x7f-\uffff"'<>]*?(?:-nap|\/nap\/|e20230424gacha|game_biz=nap_\w+|real_gacha_type=|\/common\/gacha_record\/api\/getGachaLog))[^?\x00-\x20\x7f-\uffff"'<>]+\?(?=[^\x00-\x20\x7f-\uffff"'<>]*?(?:auth_appid=webview_gacha|getGachaLog|e20230424gacha|end_id=|game_biz=nap_\w+))[^\x00-\x20\x7f-\uffff"'<>]*?authkey=[^&\x00-\x20\x7f-\uffff"'<>]+[^\x00-\x20\x7f-\uffff"'<>]*/g,
   cleanSearchParams(searchParams) {
     searchParams.delete('page')
     searchParams.delete('size')

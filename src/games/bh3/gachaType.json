@@ -1,0 +1,47 @@
+{
+  "zh-cn": [
+    { "key": "bh3_char_a", "name": "角色补给A" },
+    { "key": "bh3_char_b", "name": "角色补给B" },
+    { "key": "bh3_equip_a", "name": "装备补给A" },
+    { "key": "bh3_equip_b", "name": "装备补给B" },
+    { "key": "bh3_astralop", "name": "协同补给" },
+    { "key": "bh3_outfit", "name": "服装补给" },
+    { "key": "bh3_dorm", "name": "家园补给" }
+  ],
+  "zh-tw": [
+    { "key": "bh3_char_a", "name": "角色補給A" },
+    { "key": "bh3_char_b", "name": "角色補給B" },
+    { "key": "bh3_equip_a", "name": "裝備補給A" },
+    { "key": "bh3_equip_b", "name": "裝備補給B" },
+    { "key": "bh3_astralop", "name": "協同補給" },
+    { "key": "bh3_outfit", "name": "服裝補給" },
+    { "key": "bh3_dorm", "name": "家園補給" }
+  ],
+  "en-us": [
+    { "key": "bh3_char_a", "name": "Battlesuit Supply A" },
+    { "key": "bh3_char_b", "name": "Battlesuit Supply B" },
+    { "key": "bh3_equip_a", "name": "Equipment Supply A" },
+    { "key": "bh3_equip_b", "name": "Equipment Supply B" },
+    { "key": "bh3_astralop", "name": "AstralOp Supply" },
+    { "key": "bh3_outfit", "name": "Outfit Supply" },
+    { "key": "bh3_dorm", "name": "Dorm Supply" }
+  ],
+  "ja-jp": [
+    { "key": "bh3_char_a", "name": "キャラ補給A" },
+    { "key": "bh3_char_b", "name": "キャラ補給B" },
+    { "key": "bh3_equip_a", "name": "装備補給A" },
+    { "key": "bh3_equip_b", "name": "装備補給B" },
+    { "key": "bh3_astralop", "name": "コネクター補給" },
+    { "key": "bh3_outfit", "name": "衣装補給" },
+    { "key": "bh3_dorm", "name": "基地補給" }
+  ],
+  "ko-kr": [
+    { "key": "bh3_char_a", "name": "캐릭터 보급 A" },
+    { "key": "bh3_char_b", "name": "캐릭터 보급 B" },
+    { "key": "bh3_equip_a", "name": "장비 보급 A" },
+    { "key": "bh3_equip_b", "name": "장비 보급 B" },
+    { "key": "bh3_astralop", "name": "협력자 보급" },
+    { "key": "bh3_outfit", "name": "코스튬 보급" },
+    { "key": "bh3_dorm", "name": "본부 보급" }
+  ]
+}

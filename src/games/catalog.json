@@ -1,0 +1,50 @@
+[
+  {
+    "id": "genshin",
+    "group": "active",
+    "modes": [
+      { "id": "genshin", "modeKey": "wish" },
+      { "id": "beyond", "modeKey": "beyond" }
+    ]
+  },
+  {
+    "id": "starrail",
+    "group": "active",
+    "modes": [
+      { "id": "starrail", "modeKey": "warp" },
+      { "id": "starrail_blindbox", "modeKey": "blindbox" }
+    ]
+  },
+  {
+    "id": "zzz",
+    "group": "active",
+    "modes": [
+      { "id": "zzz", "modeKey": "signal" }
+    ]
+  },
+  {
+    "id": "bh3",
+    "group": "active",
+    "modes": [
+      { "id": "bh3", "modeKey": "supply" }
+    ]
+  },
+  {
+    "id": "petitplanet",
+    "group": "pending",
+    "statusKey": "upcoming_hyg",
+    "tagType": "warning",
+    "modes": [
+      { "id": "petitplanet", "modeKey": "gacha" }
+    ]
+  },
+  {
+    "id": "nexusanima",
+    "group": "pending",
+    "statusKey": "upcoming_hna",
+    "tagType": "warning",
+    "modes": [
+      { "id": "nexusanima", "modeKey": "gacha" }
+    ]
+  }
+]

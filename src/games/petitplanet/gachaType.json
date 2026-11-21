@@ -1,0 +1,14 @@
+{
+  "zh-cn": [
+    { "key": "hyg_event", "name": "活动卡池" },
+    { "key": "hyg_standard", "name": "常驻卡池" }
+  ],
+  "zh-tw": [
+    { "key": "hyg_event", "name": "活動卡池" },
+    { "key": "hyg_standard", "name": "常駐卡池" }
+  ],
+  "en-us": [
+    { "key": "hyg_event", "name": "Event Banner" },
+    { "key": "hyg_standard", "name": "Standard Banner" }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "zh-cn": [
+    { "key": "hna_event", "name": "活动卡池" },
+    { "key": "hna_standard", "name": "常驻卡池" }
+  ],
+  "zh-tw": [
+    { "key": "hna_event", "name": "活動卡池" },
+    { "key": "hna_standard", "name": "常駐卡池" }
+  ],
+  "en-us": [
+    { "key": "hna_event", "name": "Event Banner" },
+    { "key": "hna_standard", "name": "Standard Banner" }
+  ]
+}

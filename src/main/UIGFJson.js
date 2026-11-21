@@ -2,11 +2,10 @@ const electron = process.versions.electron ? require('electron') : {}
 const { app, ipcMain, dialog } = (typeof electron === 'object' && electron) ? electron : {}
 const fs = require('fs-extra')
 const path = require('path')
-const fetch = require('electron-fetch').default
 const Ajv = require('ajv')
 const Ajv2020 = require('ajv/dist/2020')
 
-const { getData, getDataPayload, getAllDataMaps, saveData, changeCurrent, getGachaType } = require('./getData')
+const { getData, getDataPayload, getAllDataMaps, saveData, changeCurrent, getGachaType, normalizeLoadedData } = require('./getData')
 const { version } = require('../../package.json')
 const config = require('./config')
 const i18n = require('./i18n')
@@ -20,9 +19,19 @@ const {
   md5,
   mapToObject,
   convertTimeZone,
-  sendMsg
+  sendMsg,
+  httpFetch
 } = require('./utils')
-const { GAME_IDS, GAME_TO_UIGF_KEY, ID_JSON, detectDataGame, getGameAdapter } = require('../games/registry')
+const {
+  GAME_IDS,
+  UIGF_GAME_IDS,
+  GAME_TO_UIGF_KEY,
+  PORTABLE_KEY_TO_GAME,
+  GAME_TO_PORTABLE_KEY,
+  ID_JSON,
+  detectDataGame,
+  getGameAdapter
+} = require('../games/registry')
 const { getItemTypeNameMap } = require('../games/genshin/gachaTypeMap')
 const { normalizeBeyondLang, normalizeBeyondPoolKey, getBeyondGachaTypeMap } = require('../games/beyond/gachaTypeMap')
 
@@ -81,7 +90,7 @@ const itemIdDictMd5 = new Map()
 const itemIdDictFileName = 'item-id-dict.json'
 
 const fetchItemIdDict = async () => {
-  let response = await fetch('https://api.uigf.org/dict/genshin/all.json')
+  let response = await httpFetch('https://api.uigf.org/dict/genshin/all.json', { timeout: 15 * 1000 })
   let responseJson = await response.json()
   if (response.status === 200) {
     Object.entries(responseJson).forEach(([lang, dict]) => {
@@ -90,7 +99,7 @@ const fetchItemIdDict = async () => {
   } else {
     console.error(`All dict fetch failed: HTTP ${response.status}: ` + (responseJson.detail || 'unknown error'))
     for (const [, lang] of uigfLangMap) {
-      response = await fetch(`https://api.uigf.org/dict/genshin/${lang}.json`)
+      response = await httpFetch(`https://api.uigf.org/dict/genshin/${lang}.json`, { timeout: 15 * 1000 })
       const responseText = await response.text().catch(e => console.error(e))
       responseJson = JSON.parse(responseText)
       if (response.status !== 200) continue
@@ -101,7 +110,7 @@ const fetchItemIdDict = async () => {
 }
 
 const fetchItemIdDictMd5 = async () => {
-  const response = await fetch('https://api.uigf.org/md5/genshin')
+  const response = await httpFetch('https://api.uigf.org/md5/genshin', { timeout: 15 * 1000 })
   const responseJson = await response.json()
   if (response.status !== 200) throw new Error(`MD5 fetch failed: HTTP ${response.status}: ` + (responseJson.detail || 'unknown error'))
   Object.entries(responseJson).forEach(([lang, hash]) => itemIdDictMd5.set(lang, hash))
@@ -148,7 +157,7 @@ const saveLookupTable = async () => {
 const getGenshinItemId = async (lang, itemName) => {
   const normalizedLang = lang || 'chs'
   if (!itemIdDict.has(normalizedLang) || !itemIdDict.get(normalizedLang).has(itemName)) {
-    const response = await fetch(`https://api.uigf.org/identify/genshin/${encodeURIComponent(itemName)}`)
+    const response = await httpFetch(`https://api.uigf.org/identify/genshin/${encodeURIComponent(itemName)}`, { timeout: 15 * 1000 })
     const responseJson = await response.json()
     if (response.status !== 200 || !responseJson?.matched?.length) {
       throw new Error(`Couldn't find the item_id for the ${itemName}.`)
@@ -361,8 +370,9 @@ const generateUigf4xJson = async (selections = null, allMaps = getAllDataMaps(),
     })
   } else {
     normalizedSelections = []
-    for (const gameId of GAME_IDS) {
+    for (const gameId of UIGF_GAME_IDS) {
       const map = allMaps[gameId]
+      if (!map) continue
       for (const [uid, data] of map.entries()) {
         if (!data.deleted && data.result?.size) {
           normalizedSelections.push({ game: gameId, uid })
@@ -381,9 +391,10 @@ const generateUigf4xJson = async (selections = null, allMaps = getAllDataMaps(),
   }
 
   for (const { game, uid } of normalizedSelections) {
+    const uigfKey = GAME_TO_UIGF_KEY[game]
+    if (!uigfKey) continue
     const data = allMaps[game]?.get(uid)
     if (!data || !data.result?.size) continue
-    const uigfKey = GAME_TO_UIGF_KEY[game]
     if (!result[uigfKey]) {
       result[uigfKey] = []
     }
@@ -720,8 +731,312 @@ const importBeyondUigf4x = async (accounts) => {
   }
 }
 
+const generatePortableGameJson = (gameId = config.currentGame, targetUid = null, allMaps = getAllDataMaps()) => {
+  const map = allMaps[gameId]
+  const uid = String(targetUid || config.getGameConfig(gameId).current || '')
+  const data = map?.get(uid)
+  if (!data || !data.result?.size) {
+    throw new Error('数据为空')
+  }
+  const adapter = getGameAdapter(gameId)
+  const typeMap = data.typeMap instanceof Map
+    ? data.typeMap
+    : new Map(Array.isArray(data.typeMap) ? data.typeMap : adapter.defaultTypeMap)
+  const listTemp = []
+
+  for (const [poolKey, arr] of data.result) {
+    if (!Array.isArray(arr)) continue
+    const poolName = typeMap.get(poolKey) || ''
+    for (const log of arr) {
+      if (Array.isArray(log)) {
+        listTemp.push({
+          id: shouldBeString(log[5]) || '',
+          gacha_type: shouldBeString(log[4]) || String(poolKey),
+          pool_name: poolName,
+          time: log[0],
+          name: log[1],
+          item_type: log[2],
+          rank_type: String(log[3]),
+          count: '1'
+        })
+      } else if (log && typeof log === 'object') {
+        const entry = {
+          id: String(log.id || ''),
+          gacha_type: String(log.gacha_type || poolKey),
+          pool_name: log.pool_name || poolName,
+          time: log.time,
+          name: log.item_name ?? log.name ?? '',
+          item_type: log.item_type || '',
+          rank_type: String(log.rank_type || ''),
+          count: String(log.count ?? '1')
+        }
+        if (log.item_id) entry.item_id = String(log.item_id)
+        if (log.gacha_id) entry.gacha_id = String(log.gacha_id)
+        if (log.raw_content) entry.raw_content = String(log.raw_content)
+        if (log.raw_type) entry.raw_type = String(log.raw_type)
+        if (log.pool_id) entry.pool_id = String(log.pool_id)
+        if (log.blind_box_sub_rarity) entry.blind_box_sub_rarity = String(log.blind_box_sub_rarity)
+        if (log.pet_id) entry.pet_id = String(log.pet_id)
+        if (log.chroma_appearance_id) entry.chroma_appearance_id = String(log.chroma_appearance_id)
+        if (log.pet_type) entry.pet_type = String(log.pet_type)
+        listTemp.push(entry)
+      }
+    }
+  }
+
+  listTemp.sort((a, b) => {
+    const tsA = Date.parse(String(a.time || '').replace(' ', 'T') + 'Z') || 0
+    const tsB = Date.parse(String(b.time || '').replace(' ', 'T') + 'Z') || 0
+    if (tsA !== tsB) return tsA - tsB
+    if (/^\d+$/.test(a.id) && /^\d+$/.test(b.id)) {
+      const diff = BigInt(a.id) - BigInt(b.id)
+      return diff > 0n ? 1 : diff < 0n ? -1 : 0
+    }
+    return 0
+  })
+
+  return {
+    info: {
+      format: 'hoyo-gacha-portable-v1',
+      game: gameId,
+      portable_key: GAME_TO_PORTABLE_KEY[gameId] || GAME_TO_UIGF_KEY[gameId] || gameId,
+      game_biz: adapter.gameBiz || gameId,
+      uid: String(data.uid || uid),
+      lang: data.lang || config.lang || 'zh-cn',
+      region_time_zone: typeof data.region_time_zone === 'number' ? data.region_time_zone : 8,
+      export_time: formatDate(new Date()),
+      export_timestamp: Math.round(Date.now() / 1000),
+      export_app: 'hoyo-gacha-export',
+      export_app_version: `v${version}`
+    },
+    typeMap: [...typeMap.entries()],
+    list: listTemp
+  }
+}
+
+const exportPortableGameJson = async (gameId = config.currentGame, targetUid = null) => {
+  const result = generatePortableGameJson(gameId, targetUid)
+  const defaultName = `${gameId}_${result.info.uid}_${getTimeString()}.json`
+  const filePath = dialog.showSaveDialogSync({
+    defaultPath: path.join(app.getPath('downloads'), defaultName),
+    filters: [
+      { name: 'JSON', extensions: ['json'] }
+    ]
+  })
+  if (filePath) {
+    await fs.ensureFile(filePath)
+    await fs.writeFile(filePath, JSON.stringify(result, null, config.readableJSON ? '\t' : null))
+  }
+}
+
+const resolvePortableGameId = (rawKey) => {
+  const key = String(rawKey || '').trim().toLowerCase()
+  if (!key) return null
+  if (GAME_IDS.includes(key)) return key
+  if (PORTABLE_KEY_TO_GAME[key]) return PORTABLE_KEY_TO_GAME[key]
+  if (key === 'hk4e' || key === 'hk4e_cn' || key === 'hk4e_global') return 'genshin'
+  if (key === 'hkrpg' || key === 'hkrpg_cn' || key === 'hkrpg_global') return 'starrail'
+  if (key === 'nap' || key === 'nap_cn' || key === 'nap_global') return 'zzz'
+  if (key === 'hk4e_ugc') return 'beyond'
+  return null
+}
+
+const importPortableAccount = async (accountData, gameId) => {
+  const adapter = getGameAdapter(gameId)
+  const dataMap = getAllDataMaps()[gameId]
+  const uid = String(accountData.uid || `${gameId}_imported`)
+  const isNew = !dataMap.has(uid)
+  const existing = dataMap.get(uid)
+  const targetLang = isNew ? (accountData.lang || config.lang) : (existing.lang || accountData.lang || config.lang)
+  const regionTimeZone = typeof accountData.timezone === 'number'
+    ? accountData.timezone
+    : (typeof accountData.region_time_zone === 'number' ? accountData.region_time_zone : (existing?.region_time_zone ?? 8))
+
+  const incomingTypeMap = new Map(getGachaType(targetLang, gameId))
+  if (Array.isArray(accountData.typeMap)) {
+    for (const pair of accountData.typeMap) {
+      if (Array.isArray(pair) && pair.length >= 2) {
+        incomingTypeMap.set(String(pair[0]), String(pair[1]))
+      }
+    }
+  } else if (accountData.typeMap instanceof Map) {
+    for (const [k, v] of accountData.typeMap.entries()) {
+      incomingTypeMap.set(String(k), String(v))
+    }
+  }
+
+  const grouped = new Map()
+  const rawList = Array.isArray(accountData.list) ? accountData.list : []
+
+  for (const entry of rawList) {
+    if (!entry || typeof entry !== 'object') continue
+    if (gameId === 'bh3') {
+      const parsed = adapter.parseBh3ApiRecord(entry)
+      if (!parsed || !parsed.name) continue
+      const poolLabel = String(entry.pool_name || entry.pool || '')
+      const poolKey = entry.gacha_type && String(entry.gacha_type).startsWith('bh3_')
+        ? String(entry.gacha_type)
+        : adapter.normalizeBh3PoolKey(poolLabel || entry.gacha_type || '', entry.raw_type || '')
+      if (!grouped.has(poolKey)) grouped.set(poolKey, [])
+      if (!incomingTypeMap.has(poolKey)) {
+        incomingTypeMap.set(poolKey, poolLabel || poolKey)
+      }
+      const rankType = parsed.rank_type || (entry.rank_type != null ? String(entry.rank_type) : adapter.resolveBh3Rank(parsed.item_type, parsed.name))
+      grouped.get(poolKey).push({
+        id: entry.id ? String(entry.id) : '',
+        gacha_type: poolKey,
+        pool_name: incomingTypeMap.get(poolKey) || poolLabel || poolKey,
+        raw_type: entry.raw_type ? String(entry.raw_type) : '',
+        time: parsed.time,
+        name: parsed.name,
+        item_type: parsed.item_type,
+        rank_type: String(rankType),
+        raw_content: parsed.raw_content,
+        count: String(entry.count ?? '1')
+      })
+    } else if (gameId === 'starrail_blindbox') {
+      const poolId = String(entry.pool_id || entry.gacha_type || '1001')
+      if (!grouped.has(poolId)) grouped.set(poolId, [])
+      if (!incomingTypeMap.has(poolId)) {
+        incomingTypeMap.set(poolId, entry.pool_name || `星际潮玩 (${poolId})`)
+      }
+      const subRarity = entry.blind_box_sub_rarity != null ? String(entry.blind_box_sub_rarity) : ''
+      const rankType = subRarity
+        ? adapter.mapBlindBoxRarity(subRarity, entry.rank_type)
+        : String(entry.rank_type || '3')
+      const itemName = entry.item_name ?? entry.name ?? ''
+      grouped.get(poolId).push({
+        id: String(entry.id || ''),
+        pool_id: poolId,
+        gacha_id: poolId,
+        gacha_type: poolId,
+        item_id: String(entry.item_id || ''),
+        item_type: entry.item_type || entry.type_name || '',
+        name: itemName,
+        item_name: itemName,
+        rank_type: rankType,
+        blind_box_sub_rarity: subRarity,
+        pet_id: entry.pet_id != null ? String(entry.pet_id) : '',
+        chroma_appearance_id: entry.chroma_appearance_id != null ? String(entry.chroma_appearance_id) : '',
+        pet_type: entry.pet_type != null ? String(entry.pet_type) : '',
+        time: entry.time || '',
+        count: String(entry.count ?? '1')
+      })
+    } else {
+      const poolKey = String(entry.gacha_type || adapter.order[0] || 'default')
+      if (!grouped.has(poolKey)) grouped.set(poolKey, [])
+      if (!incomingTypeMap.has(poolKey)) {
+        incomingTypeMap.set(poolKey, entry.pool_name || poolKey)
+      }
+      grouped.get(poolKey).push({
+        id: String(entry.id || ''),
+        gacha_id: String(entry.gacha_id || ''),
+        gacha_type: poolKey,
+        item_id: String(entry.item_id || ''),
+        item_type: entry.item_type || '',
+        name: entry.name ?? entry.item_name ?? '',
+        rank_type: String(entry.rank_type || '3'),
+        time: entry.time || '',
+        count: String(entry.count ?? '1')
+      })
+    }
+  }
+
+  const mergedTypeMap = new Map(existing?.typeMap instanceof Map ? existing.typeMap : [])
+  for (const [k, v] of incomingTypeMap.entries()) {
+    mergedTypeMap.set(k, v)
+  }
+
+  const incomingObj = { result: grouped, uid }
+  const mergedResult = mergeData(existing, incomingObj, { multiset: gameId === 'bh3' })
+  const finalData = {
+    result: mergedResult,
+    typeMap: mergedTypeMap,
+    time: Date.now(),
+    uid,
+    lang: targetLang,
+    region_time_zone: regionTimeZone,
+    deleted: isNew ? false : Boolean(existing.deleted)
+  }
+  await saveAndBackup(finalData, gameId)
+}
+
+const importHoYoGetBh3Json = async (importData) => {
+  if (Array.isArray(importData.bh3) && importData.bh3.length) {
+    for (const acc of importData.bh3) {
+      await importPortableAccount(acc, 'bh3')
+    }
+    return
+  }
+
+  const uid = String(importData.uid || importData.info?.uid || 'bh3_imported')
+  const lang = importData.lang || importData.info?.lang || config.lang
+  const poolsObj = importData.pools || importData.data || {}
+  const list = []
+  for (const [poolName, poolVal] of Object.entries(poolsObj)) {
+    const records = Array.isArray(poolVal)
+      ? poolVal
+      : (Array.isArray(poolVal?.records) ? poolVal.records : (Array.isArray(poolVal?.list) ? poolVal.list : []))
+    for (const rec of records) {
+      if (!rec || typeof rec !== 'object') continue
+      list.push({
+        ...rec,
+        pool_name: rec.pool_name || poolName
+      })
+    }
+  }
+  await importPortableAccount({ uid, lang, list }, 'bh3')
+}
+
 const importParsedJson = async (importData) => {
   const importedGames = []
+
+  // Portable single-game or multi-game format (hoyo-gacha-portable-v1)
+  if (importData?.info?.format === 'hoyo-gacha-portable-v1') {
+    if (Array.isArray(importData.list)) {
+      const gameId = resolvePortableGameId(importData.info.game || importData.info.portable_key || importData.info.game_biz)
+      if (!gameId) {
+        throw new Error('Unable to identify game for portable JSON file')
+      }
+      await importPortableAccount({
+        uid: importData.info.uid,
+        lang: importData.info.lang,
+        timezone: importData.info.region_time_zone,
+        typeMap: importData.typeMap,
+        list: importData.list
+      }, gameId)
+      importedGames.push(gameId)
+      return importedGames
+    }
+    for (const [key, accounts] of Object.entries(importData)) {
+      if (key === 'info' || !Array.isArray(accounts) || !accounts.length) continue
+      const gameId = resolvePortableGameId(key)
+      if (!gameId) continue
+      for (const acc of accounts) {
+        await importPortableAccount(acc, gameId)
+      }
+      importedGames.push(gameId)
+    }
+    if (importedGames.length) return importedGames
+  }
+
+  // HoYoGet-Plugin BH3 export format
+  if (
+    (importData?.game === 'bh3' && (importData.pools || importData.data || Array.isArray(importData.list))) ||
+    (!importData?.info?.version && Array.isArray(importData?.bh3) && importData.bh3.length)
+  ) {
+    if (Array.isArray(importData.list)) {
+      await importPortableAccount({
+        uid: importData.uid || 'bh3_imported',
+        lang: importData.lang || config.lang,
+        list: importData.list
+      }, 'bh3')
+    } else {
+      await importHoYoGetBh3Json(importData)
+    }
+    importedGames.push('bh3')
+    return importedGames
+  }
 
   // Legacy single-game local-data format
   if (validateLocalJson(importData) || (!importData?.info && importData?.result && importData?.uid)) {
@@ -729,7 +1044,10 @@ const importParsedJson = async (importData) => {
     if (!detectedGame) {
       throw new Error('Unable to identify game for local JSON file')
     }
-    await saveAndBackup(importData, detectedGame)
+    const normalized = normalizeLoadedData(importData, detectedGame)
+    const existing = getAllDataMaps()[detectedGame]?.get(normalized.uid)
+    normalized.result = mergeData(existing, normalized, { multiset: detectedGame === 'bh3' })
+    await saveAndBackup(normalized, detectedGame)
     importedGames.push(detectedGame)
     return importedGames
   }
@@ -822,6 +1140,10 @@ if (ipcMain) {
     await start(selections, uigfVersion)
   })
 
+  ipcMain.handle('EXPORT_GAME_JSON', async (event, gameId = null, targetUid = null) => {
+    await exportPortableGameJson(gameId || config.currentGame, targetUid)
+  })
+
   ipcMain.handle('IMPORT_UIGF_JSON', async () => {
     return await importJson()
   })
@@ -831,8 +1153,12 @@ module.exports = {
   generateUigf30Json,
   generateUigf41Json,
   generateUigf42Json,
+  generatePortableGameJson,
+  exportPortableGameJson,
   importJson,
   importParsedJson,
+  importPortableAccount,
+  importHoYoGetBh3Json,
   importGenshinUigf30,
   importGenshinUigf4x,
   importObjectGameAccount,

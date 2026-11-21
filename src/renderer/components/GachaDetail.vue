@@ -47,6 +47,20 @@
       </span>
     </template>
   </p>
+  <p v-else-if="isGenericRank" class="text-gray-600 text-xs mb-1">
+    <span :title="formatTypeMapTitle(detail.typeMap5)" class="mr-3 whitespace-pre cursor-help text-yellow-500">
+      <span class="min-w-10 inline-block">{{text.star5}}{{colon}}{{detail.count5}}</span>
+      [{{percent(detail.count5, detail.total)}}]
+    </span>
+    <br><span :title="formatTypeMapTitle(detail.typeMap4)" class="mr-3 whitespace-pre cursor-help text-purple-600">
+      <span class="min-w-10 inline-block">{{text.star4}}{{colon}}{{detail.count4}}</span>
+      [{{percent(detail.count4, detail.total)}}]
+    </span>
+    <br><span :title="formatTypeMapTitle(detail.typeMap3)" class="mr-3 whitespace-pre cursor-help text-blue-500">
+      <span class="min-w-10 inline-block">{{text.star3}}{{colon}}{{detail.count3}}</span>
+      [{{percent(detail.count3, detail.total)}}]
+    </span>
+  </p>
   <p v-else class="text-gray-600 text-xs mb-1">
     <span :title="`${text.character}${colon}${detail.count5c}\n${text.weapon}${colon}${detail.count5w}`" class="mr-3 whitespace-pre cursor-help text-yellow-500">
       <span class="min-w-10 inline-block">{{text.star5}}{{colon}}{{detail.count5}}</span>
@@ -91,8 +105,16 @@ const props = defineProps({
   }
 })
 
+const GENERIC_RANK_GAMES = new Set(['bh3', 'starrail_blindbox', 'petitplanet', 'nexusanima'])
+const BLINDBOX_SUB_RARITY = {
+  'zh-cn': { 52: '隐藏款·稀有猫猫狸', 51: '隐藏款·稀有奇美拉', 41: '猫猫狸款', 31: '奇美拉款' },
+  'zh-tw': { 52: '隱藏款·稀有貓貓狸', 51: '隱藏款·稀有奇美拉', 41: '貓貓狸款', 31: '奇美拉款' },
+  'en-us': { 52: 'Secret · Rare Meowcat', 51: 'Secret · Rare Chimera', 41: 'Meowcat Edition', 31: 'Chimera Edition' }
+}
+
 const isZzz = computed(() => props.game === 'zzz')
 const isBeyond = computed(() => props.game === 'beyond')
+const isGenericRank = computed(() => GENERIC_RANK_GAMES.has(props.game))
 const type = computed(() => props.data[0])
 const isStandardBeyond = computed(() => isBeyond.value && String(type.value) === '1000')
 const detail = computed(() => props.data[1])
@@ -113,14 +135,26 @@ const resolveSubPoolLabel = (poolCode) => {
   return table?.[poolCode] || poolCode
 }
 
+const resolveBlindBoxSubRarity = (code) => {
+  const langKey = String(props.lang || 'zh-cn').toLowerCase()
+  const table = BLINDBOX_SUB_RARITY[langKey] || (langKey.startsWith('zh-tw') ? BLINDBOX_SUB_RARITY['zh-tw'] : langKey.startsWith('zh') ? BLINDBOX_SUB_RARITY['zh-cn'] : BLINDBOX_SUB_RARITY['en-us'])
+  return table[code] || code
+}
+
 const getSsrTitle = (item) => {
   const time = item[2]
-  const poolCode = String(item[3] || '')
-  if (props.game === 'genshin' && poolCode === '400') {
+  const extra = String(item[3] || '')
+  if (props.game === 'genshin' && extra === '400') {
     return `${time}\n${props.i18n.excel.wish2}`
   }
-  if (props.game === 'beyond' && poolCode && poolCode !== '2000' && poolCode !== '1000') {
-    return `${time}\n${resolveSubPoolLabel(poolCode)}`
+  if (props.game === 'beyond' && extra && extra !== '2000' && extra !== '1000') {
+    return `${time}\n${resolveSubPoolLabel(extra)}`
+  }
+  if (props.game === 'starrail_blindbox' && extra) {
+    return `${time}\n${resolveBlindBoxSubRarity(extra)}`
+  }
+  if (isGenericRank.value && extra && extra !== String(type.value)) {
+    return `${time}\n${extra}`
   }
   return time
 }

@@ -1,9 +1,8 @@
 const electron = process.versions.electron ? require('electron') : {}
 const { app } = (typeof electron === 'object' && electron) ? electron : {}
-const fetch = require('electron-fetch').default
 const semver = require('semver')
 const { version } = require('../../../package.json')
-const { sendMsg } = require('../utils')
+const { sendMsg, httpFetch } = require('../utils')
 const config = require('../config')
 
 const updateInfo = {
@@ -15,7 +14,7 @@ const isDev = app ? !app.isPackaged : true
 const checkUpdate = async () => {
   if (isDev || !config.autoUpdate) return
   try {
-    const res = await fetch('https://api.github.com/repos/h-void/hoyo-gacha-export/releases/latest', {
+    const res = await httpFetch('https://api.github.com/repos/h-void/hoyo-gacha-export/releases/latest', {
       timeout: 10 * 1000,
       headers: {
         'Accept': 'application/vnd.github+json',

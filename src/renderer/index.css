@@ -1,10 +1,19 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@utility min-w-10 {
+  min-width: 60px;
+}
 
 @layer base {
   :root {
     --el-font-size-base: 12px !important;
+  }
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
   }
   ::-webkit-scrollbar {
     width: 6px;
@@ -15,8 +24,6 @@
   }
 }
 
-@layer utilities {
-  .cache-clean-dialog .el-dialog__body {
-    padding: 0 20px;
-  }
+.cache-clean-dialog .el-dialog__body {
+  padding: 0 20px;
 }

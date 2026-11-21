@@ -1,12 +1,10 @@
 const fs = require('fs-extra')
 const path = require('path')
-const fetch = require('electron-fetch').default
 const electron = process.versions.electron ? require('electron') : {}
 const electronObj = (typeof electron === 'object' && electron !== null) ? electron : {}
 const { BrowserWindow, app } = electronObj
 const crypto = require('crypto')
 const util = require('util')
-const { glob } = require('glob')
 const os = require('os')
 
 const readdir = util.promisify(fs.readdir)
@@ -113,19 +111,33 @@ const authkeyMask = (text = '') => {
 }
 
 if (app) {
-  const unhandled = require('electron-unhandled')
-  unhandled({
-    showDialog: false,
-    logger: function (err) {
-      log.push([Date.now(), 'ERROR', authkeyMask(err.stack || err.message)])
-      saveLog()
-    }
-  })
+  const logUnhandledError = (err) => {
+    const error = err instanceof Error ? err : new Error(String(err))
+    log.push([Date.now(), 'ERROR', authkeyMask(error.stack || error.message)])
+    saveLog()
+  }
+  process.on('uncaughtException', logUnhandledError)
+  process.on('unhandledRejection', logUnhandledError)
 }
 
-const request = async (url) => {
-  const res = await fetch(url, {
-    timeout: 15 * 1000
+const httpFetch = async (url, options = {}) => {
+  const { timeout, signal, ...rest } = options
+  const fetchOptions = { ...rest }
+  if (!signal && typeof timeout === 'number' && timeout > 0 && typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    fetchOptions.signal = AbortSignal.timeout(timeout)
+  } else if (signal) {
+    fetchOptions.signal = signal
+  }
+  const useElectronNet = app && typeof app.isReady === 'function' && app.isReady() &&
+    electronObj.net && typeof electronObj.net.fetch === 'function'
+  const fetchFn = useElectronNet ? electronObj.net.fetch.bind(electronObj.net) : globalThis.fetch
+  return await fetchFn(url, fetchOptions)
+}
+
+const request = async (url, options = {}) => {
+  const res = await httpFetch(url, {
+    timeout: 15 * 1000,
+    ...options
   })
   return await res.json()
 }
@@ -296,20 +308,33 @@ const normalizeCacheText = (rawText = '') => {
 }
 
 async function getCacheText(gamePath) {
-  const results = await glob(path.join(gamePath, '/webCaches{/,/*/}Cache/Cache_Data/data_2'), {
-    stat: true,
-    withFileTypes: true,
-    nodir: true,
-    windowsPathsNoEscape: true
-  })
-  if (!results || !results.length) {
+  const webCachesDir = path.join(gamePath, 'webCaches')
+  const candidatePaths = [path.join(webCachesDir, 'Cache', 'Cache_Data', 'data_2')]
+  try {
+    const entries = await fs.readdir(webCachesDir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (entry.isDirectory() || entry.isSymbolicLink()) {
+        candidatePaths.push(path.join(webCachesDir, entry.name, 'Cache', 'Cache_Data', 'data_2'))
+      }
+    }
+  } catch (e) {}
+
+  const existing = []
+  for (const filePath of candidatePaths) {
+    try {
+      const stat = await fs.stat(filePath)
+      if (stat.isFile()) {
+        existing.push({ filePath, mtimeMs: stat.mtimeMs })
+      }
+    } catch (e) {}
+  }
+  if (!existing.length) {
     return ['', '']
   }
-  const timeSortedFiles = results
-    .sort((a, b) => b.mtimeMs - a.mtimeMs)
-    .map(p => p.fullpath())
-  const cacheText = await fs.readFile(timeSortedFiles[0], 'utf8')
-  return [normalizeCacheText(cacheText), timeSortedFiles[0]]
+  existing.sort((a, b) => b.mtimeMs - a.mtimeMs)
+  const latestPath = existing[0].filePath
+  const cacheText = await fs.readFile(latestPath, 'utf8')
+  return [normalizeCacheText(cacheText), latestPath]
 }
 
 const mapToObject = (map) => {
@@ -325,6 +350,7 @@ const mapToObject = (map) => {
 module.exports = {
   readdir,
   sleep,
+  httpFetch,
   request,
   hash,
   md5,

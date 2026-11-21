@@ -87,23 +87,109 @@ const mergeList = (a, b) => {
   })
 }
 
-const mergeData = (local, origin) => {
+const { buildBh3SyntheticId } = require('../../games/bh3/gachaTypeMap')
+
+const getMultisetKey = (item) => {
+  if (!item || typeof item !== 'object') return String(item || '')
+  const content = item.raw_content || `${item.item_type || ''}|${item.name || item.item_name || ''}`
+  return `${item.time || ''}||${content}`
+}
+
+const assignDeterministicSyntheticIds = (list, poolKey = 'bh3_char_a') => {
+  const seqByTime = new Map()
+  return list.map(item => {
+    const timeKey = String(item.time || '')
+    const seq = (seqByTime.get(timeKey) || 0) + 1
+    seqByTime.set(timeKey, seq)
+    return {
+      ...item,
+      id: buildBh3SyntheticId(timeKey, poolKey, seq)
+    }
+  })
+}
+
+/**
+ * Multiset-safe merge for APIs without server-side record IDs (e.g. Honkai Impact 3rd).
+ * Preserves legitimate identical items within the same second (e.g. 10-pull materials)
+ * while deduplicating overlapping refreshes by matching multiplicity per (time, raw_content).
+ */
+const mergeMultisetList = (localList, incomingList, poolKey = 'bh3_char_a') => {
+  const base = Array.isArray(localList) ? localList.map(item => ({ ...item })) : []
+  const incoming = Array.isArray(incomingList) ? incomingList.map(item => ({ ...item })) : []
+  if (!base.length && !incoming.length) return []
+
+  const localCounts = new Map()
+  const localBySig = new Map()
+  for (const item of base) {
+    const sig = getMultisetKey(item)
+    localCounts.set(sig, (localCounts.get(sig) || 0) + 1)
+    if (!localBySig.has(sig)) localBySig.set(sig, [])
+    localBySig.get(sig).push(item)
+  }
+
+  const seenIncoming = new Map()
+  const merged = [...base]
+
+  for (const item of incoming) {
+    const sig = getMultisetKey(item)
+    const idx = (seenIncoming.get(sig) || 0) + 1
+    seenIncoming.set(sig, idx)
+    const existingCount = localCounts.get(sig) || 0
+    if (idx <= existingCount) {
+      // Refresh rank/type metadata on overlapping item if incoming resolved a stronger rank (e.g. Wiki cache update)
+      const existingItem = localBySig.get(sig)?.[idx - 1]
+      if (existingItem && item.rank_type && (!existingItem.rank_type || (existingItem.rank_type === '4' && item.rank_type === '5'))) {
+        existingItem.rank_type = item.rank_type
+      }
+      continue
+    }
+    merged.push(item)
+  }
+
+  const withIndex = merged.map((item, idx) => ({
+    item,
+    idx,
+    ts: Date.parse(String(item.time || '').replace(' ', 'T') + 'Z') || 0
+  }))
+  withIndex.sort((x, y) => (x.ts !== y.ts ? x.ts - y.ts : x.idx - y.idx))
+
+  return assignDeterministicSyntheticIds(withIndex.map(x => x.item), poolKey)
+}
+
+const mergeData = (local, origin, options = {}) => {
+  const useMultiset = Boolean(options && options.multiset)
   if (local && local.result) {
     const localResult = local.result
     const localUid = String(local.uid)
     const originUid = String(origin.uid)
-    if (localUid !== originUid) return origin.result
+    if (localUid !== originUid) {
+      if (!useMultiset) return origin.result
+      const normalized = new Map()
+      for (const [key, value] of origin.result) {
+        normalized.set(key, mergeMultisetList([], value, key))
+      }
+      return normalized
+    }
     const mergedResult = new Map()
     for (const [key, value] of localResult) {
       mergedResult.set(key, value)
     }
     for (const [key, value] of origin.result) {
-      const newVal = mergeList(localResult.get(key), value)
+      const newVal = useMultiset
+        ? mergeMultisetList(localResult.get(key), value, key)
+        : mergeList(localResult.get(key), value)
       mergedResult.set(key, newVal)
     }
     return mergedResult
   }
+  if (useMultiset && origin && origin.result) {
+    const normalized = new Map()
+    for (const [key, value] of origin.result) {
+      normalized.set(key, mergeMultisetList([], value, key))
+    }
+    return normalized
+  }
   return origin.result
 }
 
-module.exports = { mergeData, mergeList, getRecordId }
+module.exports = { mergeData, mergeList, mergeMultisetList, getRecordId }

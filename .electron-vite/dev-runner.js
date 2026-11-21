@@ -1,3 +1,4 @@
+'use strict'
 process.env.NODE_ENV = 'development'
 
 const chalk = require('chalk')
@@ -5,21 +6,18 @@ const electron = require('electron')
 const path = require('path')
 const rollup = require('rollup')
 const Portfinder = require('portfinder')
-
-const { say } = require('cfonts')
 const { spawn } = require('child_process')
-const { createServer } = require('vite')
 
-const rendererOptions = require('./vite.config')
 const mainOptions = require('./rollup.main.config')
 const opt = mainOptions(process.env.NODE_ENV)
+const viteConfigFile = path.join(__dirname, 'vite.config.mjs')
 
 let electronProcess = null
 let manualRestart = false
 
 function logStats(proc, data) {
   let log = ''
-  log += chalk.yellow.bold(`┏ ${proc} 'Process' ${new Array((19 - proc.length) + 1).join('-')}`)
+  log += chalk.yellow.bold(`┏ ${proc} Process ${'-'.repeat(Math.max(1, 19 - proc.length))}`)
   log += '\n\n'
   if (typeof data === 'object') {
     data.toString({
@@ -31,7 +29,7 @@ function logStats(proc, data) {
   } else {
     log += `  ${data}\n`
   }
-  log += '\n' + chalk.yellow.bold(`┗ ${new Array(28 + 1).join('-')}`) + '\n'
+  log += '\n' + chalk.yellow.bold(`┗ ${'-'.repeat(28)}`) + '\n'
   console.log(log)
 }
 
@@ -49,27 +47,28 @@ function removeJunk(chunk) {
 }
 
 function startRenderer() {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     Portfinder.basePort = 9080
     Portfinder.getPort(async (err, port) => {
       if (err) {
         console.log('PortError:', err)
-        process.exit(1)
-      } else {
-        const server = await createServer(rendererOptions)
-        process.env.PORT = port
+        reject(err)
+        return
+      }
+      try {
+        process.env.PORT = String(port)
+        const { createServer } = await import('vite')
+        const server = await createServer({
+          configFile: viteConfigFile,
+          server: { port }
+        })
         await server.listen(port)
         if (process.env.TARGET === 'web') {
-          server.config.logger.info(
-            chalk.cyan(`\n  vite v${require('vite/package.json').version}`) +
-            chalk.green(` dev server running at:\n`),
-            {
-              clear: !server.config.logger.hasWarned
-            }
-          )
           server.printUrls()
         }
         resolve()
+      } catch (error) {
+        reject(error)
       }
     })
   })
@@ -130,7 +129,7 @@ function electronLog(data, color) {
       log += `  ${line}\n`
     })
     console.log(
-      chalk[color].bold(`┏ Electron -------------------`) +
+      chalk[color].bold('┏ Electron -------------------') +
       '\n\n' +
       log +
       chalk[color].bold('┗ ----------------------------') +
@@ -139,24 +138,9 @@ function electronLog(data, color) {
   }
 }
 
-function greeting() {
-  const cols = process.stdout.columns
-  let text = ''
-  if (cols > 104) text = 'electron-vite'
-  else if (cols > 76) text = 'electron-|vite'
-  else text = false
-  if (text) {
-    say(text, {
-      colors: ['yellow'],
-      font: 'simple3d',
-      space: false
-    })
-  } else console.log(chalk.yellow.bold('\n  electron-vite'))
-  console.log(chalk.blue(`getting ready...`) + '\n')
-}
-
 async function init() {
-  greeting()
+  console.log(chalk.yellow.bold('\n  electron-vite'))
+  console.log(chalk.blue('  getting ready...\n'))
   try {
     await startRenderer()
     if (process.env.TARGET !== 'web') {

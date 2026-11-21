@@ -2,29 +2,74 @@ const config = require('./config')
 const { isPlainObject } = require('./utils')
 const { GAME_IDS, gameI18n } = require('../games/registry')
 
-const BEYOND_GAME_NAMES = {
-  'zh-cn': '千星奇域',
-  'zh-tw': '千星奇域',
-  'ja-jp': '星々の幻境',
-  'ko-kr': '별바다 세계'
+const LOCALIZED_GAME_NAMES = {
+  beyond: {
+    'zh-cn': '千星奇域',
+    'zh-tw': '千星奇域',
+    'ja-jp': '星々の幻境',
+    'ko-kr': '별바다 세계'
+  },
+  starrail_blindbox: {
+    'zh-cn': '星际潮玩',
+    'zh-tw': '星際潮玩',
+    'ja-jp': '星間トレンドトイ',
+    'ko-kr': '성간 트렌드 토이'
+  },
+  bh3: {
+    'zh-cn': '崩坏3',
+    'zh-tw': '崩壞3rd',
+    'ja-jp': '崩壊3rd',
+    'ko-kr': '붕괴3rd'
+  },
+  petitplanet: {
+    'zh-cn': '星布谷地',
+    'zh-tw': '星布谷地',
+    'ja-jp': 'プチプラネット',
+    'ko-kr': '쁘띠 플래닛'
+  },
+  nexusanima: {
+    'zh-cn': '因缘精灵',
+    'zh-tw': '因緣精靈',
+    'ja-jp': '崩壊：ネクサスアニマ',
+    'ko-kr': '붕괴: 넥서스 아니마'
+  }
 }
 
 const unifiedOverrides = {
   'zh-cn': {
     'ui.win.appTitle': '米哈游抽卡记录导出工具',
     'ui.game.genshin': '原神',
-    'ui.game.starrail': '星穹铁道',
-    'ui.game.zzz': '绝区零',
     'ui.game.beyond': '千星奇域',
+    'ui.game.starrail': '星穹铁道',
+    'ui.game.starrail_blindbox': '星际潮玩',
+    'ui.game.zzz': '绝区零',
+    'ui.game.bh3': '崩坏3',
+    'ui.game.petitplanet': '星布谷地',
+    'ui.game.nexusanima': '因缘精灵',
+    'ui.gameGroup.more': '更多游戏',
+    'ui.gameStatus.upcoming_hyg': '12/04公测',
+    'ui.gameStatus.upcoming_hna': '2027春',
+    'ui.gameType.label': '类型',
+    'ui.gameType.poolFilter': '卡池',
+    'ui.gameType.allPools': '全部卡池',
+    'ui.gameType.wish': '祈愿',
+    'ui.gameType.beyond': '千星奇域 · 颂愿',
+    'ui.gameType.warp': '跃迁',
+    'ui.gameType.blindbox': '星际潮玩',
+    'ui.gameType.signal': '调频',
+    'ui.gameType.supply': '补给',
+    'ui.gameType.gacha': '抽卡',
     'ui.button.files': '导入/导出',
     'ui.button.uigf': '导出UIGF',
-    'ui.button.import': '导入UIGF',
+    'ui.button.exportGameJson': '导出当前游戏JSON',
+    'ui.button.import': '导入JSON / UIGF',
     'ui.button.cloud': '云原神',
     'ui.button.copyApiUrl': '复制API链接',
     'ui.extra.apiUrlCopied': 'API链接已复制',
     'ui.common.data': '数据',
     'ui.common.dataManage': '数据管理',
     'ui.common.game': '游戏',
+    'ui.common.type': '类型',
     'ui.common.updateTime': '更新日期',
     'ui.common.status': '状态',
     'ui.common.action': '操作',
@@ -36,33 +81,52 @@ const unifiedOverrides = {
     'ui.setting.idVersion': 'ID 数据库版本',
     'ui.setting.uigfAllAccounts': '导出全部选中账号（支持跨游戏合并）',
     'ui.setting.uigfReadable': '格式化JSON',
-    'ui.setting.uigfGenshinTitle': '原神 UIGF 选项',
+    'ui.setting.uigfGenshinTitle': 'JSON / UIGF 选项',
     'ui.setting.uigf30Export': '导出原神 UIGF v3.0',
     'ui.uigf.title': '请选择要导出的账号 (UIGF v4.2)',
     'ui.uigf.selectAll': '全选',
     'ui.uigf.emptySelection': '请至少选择一个账号',
     'ui.uigf.importSuccess': '数据导入成功',
-    'ui.uigf.exportSuccess': 'UIGF 数据导出成功',
-    'uigf.fileType': '统一可交换抽卡记录标准 v4.0 / v4.1 / v4.2 / v3.0',
+    'ui.uigf.exportSuccess': '数据导出成功',
+    'uigf.fileType': '抽卡记录 JSON (UIGF v4.2 / v3.0 / 可移植备份)',
     'ui.about.license': '本工具为开源软件，源代码使用 MIT 协议授权',
     'ui.about.creditsTitle': '致谢与上游项目声明',
-    'ui.about.creditsIntro': '本项目将以下开源项目整合为四合一桌面工具，谨向原作者致以诚挚感谢：'
+    'ui.about.creditsIntro': '本项目整合了米哈游全系电脑端游戏抽卡记录导出能力，参考并致谢以下开源项目：'
   },
   'zh-tw': {
     'ui.win.appTitle': '米哈遊抽卡紀錄匯出工具',
     'ui.game.genshin': '原神',
-    'ui.game.starrail': '星穹鐵道',
-    'ui.game.zzz': '絕區零',
     'ui.game.beyond': '千星奇域',
+    'ui.game.starrail': '星穹鐵道',
+    'ui.game.starrail_blindbox': '星際潮玩',
+    'ui.game.zzz': '絕區零',
+    'ui.game.bh3': '崩壞3rd',
+    'ui.game.petitplanet': '星布谷地',
+    'ui.game.nexusanima': '因緣精靈',
+    'ui.gameGroup.more': '更多遊戲',
+    'ui.gameStatus.upcoming_hyg': '12/04公測',
+    'ui.gameStatus.upcoming_hna': '2027春',
+    'ui.gameType.label': '類型',
+    'ui.gameType.poolFilter': '卡池',
+    'ui.gameType.allPools': '全部卡池',
+    'ui.gameType.wish': '祈願',
+    'ui.gameType.beyond': '千星奇域 · 頌願',
+    'ui.gameType.warp': '躍遷',
+    'ui.gameType.blindbox': '星際潮玩',
+    'ui.gameType.signal': '調頻',
+    'ui.gameType.supply': '補給',
+    'ui.gameType.gacha': '抽卡',
     'ui.button.files': '匯入/匯出',
     'ui.button.uigf': '匯出UIGF',
-    'ui.button.import': '匯入UIGF',
+    'ui.button.exportGameJson': '匯出目前遊戲JSON',
+    'ui.button.import': '匯入JSON / UIGF',
     'ui.button.cloud': '雲原神',
     'ui.button.copyApiUrl': '複製API連結',
     'ui.extra.apiUrlCopied': 'API連結已複製',
     'ui.common.data': '資料',
     'ui.common.dataManage': '資料管理',
     'ui.common.game': '遊戲',
+    'ui.common.type': '類型',
     'ui.common.updateTime': '更新日期',
     'ui.common.status': '狀態',
     'ui.common.action': '操作',
@@ -74,33 +138,52 @@ const unifiedOverrides = {
     'ui.setting.idVersion': 'ID 資料庫版本',
     'ui.setting.uigfAllAccounts': '匯出全部選中帳號（支援跨遊戲合併）',
     'ui.setting.uigfReadable': '格式化JSON',
-    'ui.setting.uigfGenshinTitle': '原神 UIGF 選項',
+    'ui.setting.uigfGenshinTitle': 'JSON / UIGF 選項',
     'ui.setting.uigf30Export': '匯出原神 UIGF v3.0',
     'ui.uigf.title': '請選擇要匯出的帳號 (UIGF v4.2)',
     'ui.uigf.selectAll': '全選',
     'ui.uigf.emptySelection': '請至少選擇一個帳號',
     'ui.uigf.importSuccess': '資料匯入成功',
-    'ui.uigf.exportSuccess': 'UIGF 資料匯出成功',
-    'uigf.fileType': '統一可交換抽卡紀錄標準 v4.0 / v4.1 / v4.2 / v3.0',
+    'ui.uigf.exportSuccess': '資料匯出成功',
+    'uigf.fileType': '抽卡紀錄 JSON (UIGF v4.2 / v3.0 / 可移植備份)',
     'ui.about.license': '本工具為開源軟體，原始碼使用 MIT 授權條款',
     'ui.about.creditsTitle': '致謝與上游專案聲明',
-    'ui.about.creditsIntro': '本專案將以下開源專案整合為四合一桌面工具，謹向原作者致以誠摯感謝：'
+    'ui.about.creditsIntro': '本專案整合了米哈遊全系列電腦端遊戲抽卡紀錄匯出能力，參考並致謝以下開源專案：'
   },
   'en-us': {
     'ui.win.appTitle': 'HoYo Gacha History Exporter',
     'ui.game.genshin': 'Genshin Impact',
-    'ui.game.starrail': 'Honkai: Star Rail',
-    'ui.game.zzz': 'Zenless Zone Zero',
     'ui.game.beyond': 'Miliastra Wonderland',
+    'ui.game.starrail': 'Honkai: Star Rail',
+    'ui.game.starrail_blindbox': 'Interstellar Collectibles',
+    'ui.game.zzz': 'Zenless Zone Zero',
+    'ui.game.bh3': 'Honkai Impact 3rd',
+    'ui.game.petitplanet': 'Petit Planet',
+    'ui.game.nexusanima': 'Honkai: Nexus Anima',
+    'ui.gameGroup.more': 'More Games',
+    'ui.gameStatus.upcoming_hyg': 'Dec 4',
+    'ui.gameStatus.upcoming_hna': '2027',
+    'ui.gameType.label': 'Type',
+    'ui.gameType.poolFilter': 'Banner',
+    'ui.gameType.allPools': 'All Banners',
+    'ui.gameType.wish': 'Wish',
+    'ui.gameType.beyond': 'Miliastra Wonderland (Odes)',
+    'ui.gameType.warp': 'Warp',
+    'ui.gameType.blindbox': 'Interstellar Collectibles',
+    'ui.gameType.signal': 'Signal Search',
+    'ui.gameType.supply': 'Supply',
+    'ui.gameType.gacha': 'Gacha',
     'ui.button.files': 'Import/Export',
     'ui.button.uigf': 'Export UIGF',
-    'ui.button.import': 'Import UIGF',
+    'ui.button.exportGameJson': 'Export Game JSON',
+    'ui.button.import': 'Import JSON / UIGF',
     'ui.button.cloud': 'Cloud Genshin',
     'ui.button.copyApiUrl': 'Copy API URL',
     'ui.extra.apiUrlCopied': 'API URL Copied',
     'ui.common.data': 'Data',
     'ui.common.dataManage': 'Data Management',
     'ui.common.game': 'Game',
+    'ui.common.type': 'Type',
     'ui.common.updateTime': 'Update Date',
     'ui.common.status': 'Status',
     'ui.common.action': 'Action',
@@ -112,17 +195,17 @@ const unifiedOverrides = {
     'ui.setting.idVersion': 'ID database version',
     'ui.setting.uigfAllAccounts': 'Export all selected accounts (cross-game UIGF v4.2)',
     'ui.setting.uigfReadable': 'Readable JSON',
-    'ui.setting.uigfGenshinTitle': 'Genshin UIGF Options',
+    'ui.setting.uigfGenshinTitle': 'JSON / UIGF Options',
     'ui.setting.uigf30Export': 'Export Genshin UIGF v3.0',
     'ui.uigf.title': 'Select accounts to export (UIGF v4.2)',
     'ui.uigf.selectAll': 'Select All',
     'ui.uigf.emptySelection': 'Please select at least one account',
     'ui.uigf.importSuccess': 'Data imported successfully',
-    'ui.uigf.exportSuccess': 'UIGF data exported successfully',
-    'uigf.fileType': 'Uniformed Interchangeable GachaLog Format v4.0 / v4.1 / v4.2 / v3.0',
+    'ui.uigf.exportSuccess': 'Data exported successfully',
+    'uigf.fileType': 'Gacha History JSON (UIGF v4.2 / v3.0 / Portable Backup)',
     'ui.about.license': 'This software is open source under the MIT License.',
     'ui.about.creditsTitle': 'Credits & Upstream Attribution',
-    'ui.about.creditsIntro': 'This 4-in-1 tool integrates and adapts the following open-source projects with gratitude to their authors:'
+    'ui.about.creditsIntro': 'This unified HoYoverse PC gacha exporter integrates and adapts the following open-source projects with gratitude to their authors:'
   }
 }
 
@@ -185,16 +268,20 @@ const prepareData = () => {
         )
         base = assignData(assignData(unifiedOverrides['zh-cn'], unifiedOverrides['en-us']), base)
         if (!raw[lang]) {
-          // ZZZ / Beyond lack non-zh/en full translations: still honor unified overlay
+          // Games without full 13-language packs still honor unified English overlay
           base = assignData(base, unifiedOverrides['en-us'])
         }
       }
-      if (BEYOND_GAME_NAMES[lang]) {
-        base['ui.game.beyond'] = BEYOND_GAME_NAMES[lang]
+      for (const [gKey, langTable] of Object.entries(LOCALIZED_GAME_NAMES)) {
+        if (langTable[lang]) {
+          base[`ui.game.${gKey}`] = langTable[lang]
+        }
       }
       // Normalize hideHiddenPool across games cleanly
       if (gameId === 'zzz' || gameId === 'beyond') {
         base['ui.setting.hideHiddenPool'] = base['ui.setting.hideStandard'] || 'Hide Standard Banner'
+      } else if (gameId === 'bh3') {
+        base['ui.setting.hideHiddenPool'] = base['ui.setting.hideDorm'] || 'Hide Dorm Supply'
       } else {
         base['ui.setting.hideHiddenPool'] = base['ui.setting.hideNovice'] || 'Hide Starter Banner'
       }

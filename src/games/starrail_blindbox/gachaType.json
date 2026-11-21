@@ -1,0 +1,17 @@
+{
+  "zh-cn": [
+    { "key": "1001", "name": "星际潮玩" }
+  ],
+  "zh-tw": [
+    { "key": "1001", "name": "星際潮玩" }
+  ],
+  "en-us": [
+    { "key": "1001", "name": "Interstellar Collectibles" }
+  ],
+  "ja-jp": [
+    { "key": "1001", "name": "星間トレンドトイ" }
+  ],
+  "ko-kr": [
+    { "key": "1001", "name": "성간 트렌드 토이" }
+  ]
+}
