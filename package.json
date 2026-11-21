@@ -1,6 +1,6 @@
 {
   "name": "hoyo-gacha-export",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Unified HoYoverse PC gacha history exporter for Genshin Impact (Wish & Miliastra Wonderland), Honkai: Star Rail (Warp & Interstellar Collectibles), Zenless Zone Zero, Honkai Impact 3rd, and upcoming PC titles Petit Planet and Honkai: Nexus Anima.",
   "main": "./dist/electron/main/main.js",
   "author": "h-void <118628214+h-void@users.noreply.github.com>",
